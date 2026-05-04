@@ -26,9 +26,7 @@
   }
 
   body {
-    background: linear-gradient(-45deg, #1a1a2e, #25253a, #1e1e3a, #2a1f3d, #1a2535);
-    background-size: 400% 400%;
-    animation: gradientShift 18s ease infinite;
+    background: url('Offline.png') center center / cover fixed, #25253a;
     color: var(--text);
     font-family: 'DM Sans', sans-serif;
     min-height: 100vh;
@@ -36,6 +34,20 @@
     flex-direction: column;
     align-items: center;
     padding: 3rem 1.5rem 5rem;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 18, 40, 0.55);
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
   }
 
   .container {

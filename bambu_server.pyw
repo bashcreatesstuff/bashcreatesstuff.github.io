@@ -19,9 +19,9 @@ from flask import Flask, jsonify, send_file
 from flask_cors import CORS
 
 # ─── CONFIGURE YOUR PRINTER HERE ──────────────────────────────────────────────
-PRINTER_IP     = "192.168.1.84"       # Your printer's local IP address
-PRINTER_SERIAL = "22E8AJ582300512"     # Your serial number
-ACCESS_CODE    = "cda75fda"           # Found in: Printer screen → Settings → LAN
+PRINTER_IP     = "ENTER YOUR PRINTER IP HERE"       # Your printer's local IP address
+PRINTER_SERIAL = "ENTER YOUR SERIAL NUMBER HERE"     # Your serial number
+ACCESS_CODE    = "ENTER YOUR ACCESS CODE HERE"           # Found in: Printer screen → Settings → LAN
 # ──────────────────────────────────────────────────────────────────────────────
 
 MQTT_PORT      = 8883

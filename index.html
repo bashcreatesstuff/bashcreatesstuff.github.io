@@ -39,19 +39,51 @@
     margin-bottom: 2rem;
   }
 
-  .avatar-placeholder {
-    width: 80px;
-    height: 80px;
+  .avatar {
+    width: 96px;
+    height: 96px;
     border-radius: 50%;
-    border: 2px solid var(--border);
     margin-bottom: 1.25rem;
-    display: flex;
+    display: block;
+    object-fit: cover;
+  }
+
+  .twitch-section {
+    margin-bottom: 2rem;
+  }
+
+  .twitch-embed {
+    width: 100%;
+    aspect-ratio: 16/9;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .twitch-embed iframe {
+    width: 100%;
+    height: 100%;
+    display: block;
+    border: none;
+  }
+
+  .live-badge {
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    background: var(--surface);
-    font-family: 'DM Sans', sans-serif;
-    font-size: 1.25rem;
-    color: var(--muted);
+    gap: 5px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: #bf94ff;
+    margin-bottom: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .live-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #9147ff;
   }
 
   h1 {
@@ -210,7 +242,7 @@
 <div class="container">
 
   <header class="header">
-    <div class="avatar-placeholder">BC</div>
+    <img src="BashProfilePic.png" alt="Bash Creates" class="avatar">
     <h1>Bash Creates</h1>
     <div class="bio">
       <p>"The only person that could possibly ever sustain an aneurysm while playing Animal Crossing"</p>
@@ -218,6 +250,16 @@
       <p>3D printing, streaming, gaming &amp; more</p>
     </div>
   </header>
+
+  <div class="twitch-section">
+    <div class="live-badge"><div class="live-dot"></div> Twitch</div>
+    <div class="twitch-embed">
+      <iframe
+        src="https://player.twitch.tv/?channel=bashcreates&parent=bashcreatesstuff.github.io&autoplay=false"
+        allowfullscreen>
+      </iframe>
+    </div>
+  </div>
 
   <p class="section-label">Find me on</p>
   <div class="socials">

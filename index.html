@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bash Creates Stuff</title>
+<title>Bash Creates</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -19,8 +19,16 @@
     --accent: #7c6fe0;
   }
 
+  @keyframes gradientShift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
   body {
-    background: var(--bg);
+    background: linear-gradient(-45deg, #1a1a2e, #25253a, #1e1e3a, #2a1f3d, #1a2535);
+    background-size: 400% 400%;
+    animation: gradientShift 18s ease infinite;
     color: var(--text);
     font-family: 'DM Sans', sans-serif;
     min-height: 100vh;
@@ -329,7 +337,7 @@
 
     <div class="download-card">
       <div class="download-info">
-        <div class="download-title">Bambu Labs P2S Stream Overlay</div>
+        <div class="download-title">Bambu P2S Stream Overlay</div>
         <div class="download-desc">OBS browser source overlay showing live print progress, temps, and status from your Bambu P2S.</div>
         <span class="tag">Python + HTML</span>
       </div>

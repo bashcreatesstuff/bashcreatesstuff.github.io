@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>404 - Bash Creates</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #25253a;
+    --surface: #2e2e47;
+    --border: #3d3d5c;
+    --text: #ffffff;
+    --muted: #a0a0c0;
+    --accent: #7c6fe0;
+  }
+
+  body {
+    background: url('Offline.png') center center / cover fixed, #25253a;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    text-align: center;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 18, 40, 0.88);
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 600px;
+    width: 100%;
+  }
+
+  .emote {
+    font-size: 5rem;
+    line-height: 1;
+    margin-bottom: 1rem;
+    display: block;
+    animation: wobble 1.5s infinite;
+  }
+
+  /* Use the BashRage image if available, fallback to emoji */
+  .emote-img {
+    height: 120px;
+    width: auto;
+    margin-bottom: 1rem;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    animation: wobble 1.5s infinite;
+  }
+
+  @keyframes wobble {
+    0%, 100% { transform: rotate(-3deg); }
+    50%       { transform: rotate(3deg); }
+  }
+
+  .error-code {
+    font-family: 'Space Mono', monospace;
+    font-size: 6rem;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 0.5rem;
+    text-shadow: 0 0 40px rgba(124, 111, 224, 0.4);
+    letter-spacing: -2px;
+  }
+
+  .headline {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    color: #fff;
+  }
+
+  .subtext {
+    font-size: 0.95rem;
+    color: var(--muted);
+    line-height: 1.7;
+    margin-bottom: 0.5rem;
+  }
+
+  .subtext strong {
+    color: #c8c8e0;
+  }
+
+  .quote {
+    display: inline-block;
+    margin: 1.25rem 0 1.75rem;
+    padding: 0.75rem 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    color: #c8c8e0;
+    font-style: italic;
+    max-width: 420px;
+  }
+
+  .actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0.6rem 1.1rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background 0.15s, transform 0.1s;
+  }
+
+  .btn:hover {
+    transform: translateY(-1px);
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .btn-primary:hover { background: #6a5ed0; }
+
+  .btn-secondary {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .btn-secondary:hover { background: #35354f; }
+
+  .btn-twitch {
+    background: #9147ff;
+    color: #fff;
+  }
+
+  .btn-twitch:hover { background: #7b35e0; }
+
+  footer {
+    margin-top: 3rem;
+    font-size: 0.75rem;
+    color: var(--muted);
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <img src="BashPalm112.png" alt="Bash Palm" class="emote-img" onerror="this.style.display='none'; document.getElementById('fallback-emote').style.display='block'">
+  <span id="fallback-emote" style="display:none; font-size: 5rem;">🤦</span>
+
+  <div class="error-code">404</div>
+
+  <h1 class="headline">I broke something again.</h1>
+
+  <p class="subtext">
+    The page you're looking for doesn't exist.<br>
+    <strong>Somehow this is probably Claude's fault... 🤷</strong>
+  </p>
+
+  <div class="quote">
+    "The only person that could possibly ever sustain an aneurysm while playing Animal Crossing"
+    <br><br>— and apparently, also while maintaining a website
+  </div>
+
+  <div class="actions">
+    <a href="/" class="btn btn-primary">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Take me home
+    </a>
+    <a href="https://www.twitch.tv/bashcreates" class="btn btn-twitch" target="_blank" rel="noopener">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></svg>
+      Watch me suffer live
+    </a>
+    <a href="https://discord.gg/uKRuKWjbXw" class="btn btn-secondary" target="_blank" rel="noopener">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+      Report the damage
+    </a>
+  </div>
+
+  <footer>bashcreates.ca &nbsp;·&nbsp; yes this page is intentional</footer>
+
+</div>
+</body>
+</html>

@@ -420,56 +420,49 @@
       <p class="label">I go live on the following days:</p>
       <div class="calendar-wrap">
         <div class="cal">
-          <div class="cal-header">May 2026</div>
-          <div class="cal-grid">
-            <div class="cal-day-label">Su</div>
-            <div class="cal-day-label">Mo</div>
-            <div class="cal-day-label">Tu</div>
-            <div class="cal-day-label">We</div>
-            <div class="cal-day-label">Th</div>
-            <div class="cal-day-label">Fr</div>
-            <div class="cal-day-label">Sa</div>
-            <div class="cal-day empty"></div>
-            <div class="cal-day empty"></div>
-            <div class="cal-day empty"></div>
-            <div class="cal-day empty"></div>
-            <div class="cal-day">1</div>
-            <div class="cal-day">2</div>
-            <div class="cal-day">3</div>
-            <div class="cal-day">4</div>
-            <div class="cal-day">5</div>
-            <div class="cal-day today">6</div>
-            <div class="cal-day">7</div>
-            <div class="cal-day">8</div>
-            <div class="cal-day">9</div>
-            <div class="cal-day">10</div>
-            <div class="cal-day">11</div>
-            <div class="cal-day">12</div>
-            <div class="cal-day">13</div>
-            <div class="cal-day">14</div>
-            <div class="cal-day">15</div>
-            <div class="cal-day">16</div>
-            <div class="cal-day">17</div>
-            <div class="cal-day">18</div>
-            <div class="cal-day">19</div>
-            <div class="cal-day">20</div>
-            <div class="cal-day">21</div>
-            <div class="cal-day">22</div>
-            <div class="cal-day">23</div>
-            <div class="cal-day">24</div>
-            <div class="cal-day">25</div>
-            <div class="cal-day">26</div>
-            <div class="cal-day">27</div>
-            <div class="cal-day">28</div>
-            <div class="cal-day">29</div>
-            <div class="cal-day">30</div>
-            <div class="cal-day">31</div>
-          </div>
+          <div class="cal-header" id="calHeader"></div>
+          <div class="cal-grid" id="calGrid"></div>
         </div>
         <div class="shrug-overlay">🤷</div>
       </div>
       <p class="hint">Follow on <a href="https://www.twitch.tv/bashcreates" class="twitch-link">Twitch</a> or <a href="https://discord.gg/uKRuKWjbXw" class="discord-link">Discord</a> to get notified!</p>
     </div>
+
+    <script>
+      (function() {
+        const now = new Date();
+        const today = now.getDate();
+        const month = now.getMonth();
+        const year = now.getFullYear();
+        const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const firstDay = new Date(year, month, 1).getDay();
+
+        document.getElementById('calHeader').textContent = months[month] + ' ' + year;
+
+        const grid = document.getElementById('calGrid');
+        const labels = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+        labels.forEach(l => {
+          const d = document.createElement('div');
+          d.className = 'cal-day-label';
+          d.textContent = l;
+          grid.appendChild(d);
+        });
+
+        for (let i = 0; i < firstDay; i++) {
+          const d = document.createElement('div');
+          d.className = 'cal-day empty';
+          grid.appendChild(d);
+        }
+
+        for (let i = 1; i <= daysInMonth; i++) {
+          const d = document.createElement('div');
+          d.className = 'cal-day' + (i === today ? ' today' : '');
+          d.textContent = i;
+          grid.appendChild(d);
+        }
+      })();
+    </script>
 
   </div> <!-- end right-col -->
 

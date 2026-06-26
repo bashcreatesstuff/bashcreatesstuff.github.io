@@ -331,6 +331,55 @@
     opacity: 0.7;
   }
 
+  @media (max-width: 620px) {
+    body {
+      padding: 2rem 1rem 4rem;
+    }
+
+    /* Stack columns, embed first */
+    .two-col {
+      display: flex !important;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .right-col { order: -1; margin-bottom: 2rem; }
+    .left-col  { order:  1; }
+
+    /* Intro: centered, scaled logo */
+    #intro {
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 2rem;
+    }
+
+    .glitch-wrap,
+    #introLogo {
+      width: 200px;
+      height: 200px;
+    }
+
+    .intro-title {
+      justify-content: center;
+    }
+
+    .intro-title span {
+      font-size: 1.3rem;
+    }
+
+    /* Download cards: stack button below text */
+    .download-card {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .download-btn {
+      align-self: flex-start;
+      margin-top: 0.5rem;
+    }
+  }
+
   /* Intro splash */
   #intro {
     position: fixed;
@@ -520,7 +569,7 @@
 </div>
 <div class="container">
 
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start;">
+<div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start;">
   <div class="left-col">
 
     <header class="header">

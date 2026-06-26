@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bash Creates</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&family=Orbitron:wght@700&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -394,13 +394,27 @@
     animation: glitchC 3s steps(1) 0.15s both;
   }
 
-  #intro span {
-    font-family: 'DM Sans', sans-serif;
+  .intro-title {
+    display: flex;
+    gap: 0.5rem;
+    overflow: hidden;
+  }
+
+  .intro-title span {
+    font-family: 'Orbitron', sans-serif;
     font-size: 1.75rem;
     font-weight: 700;
     color: #ffffff;
-    letter-spacing: -0.01em;
-    animation: introTextIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) 1.4s both;
+    letter-spacing: 0.05em;
+    display: block;
+  }
+
+  .intro-bash {
+    animation: slideFromLeft 0.5s cubic-bezier(0.22, 1, 0.36, 1) 1.4s both;
+  }
+
+  .intro-creates {
+    animation: slideFromRight 0.5s cubic-bezier(0.22, 1, 0.36, 1) 2.1s both;
   }
 
   @keyframes glitchLogo {
@@ -478,9 +492,14 @@
     100% { opacity: 0; }
   }
 
-  @keyframes introTextIn {
-    from { opacity: 0; transform: translateY(8px); filter: blur(4px); }
-    to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+  @keyframes slideFromLeft {
+    from { opacity: 0; transform: translateX(-40px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes slideFromRight {
+    from { opacity: 0; transform: translateX(40px); }
+    to   { opacity: 1; transform: translateX(0); }
   }
 
   @keyframes introFadeOut {
@@ -494,7 +513,10 @@
   <div class="glitch-wrap">
     <img src="BashProfilePic.png" alt="Bash Creates" id="introLogo">
   </div>
-  <span>Bash Creates</span>
+  <div class="intro-title">
+    <span class="intro-bash">Bash</span>
+    <span class="intro-creates">Creates</span>
+  </div>
 </div>
 <div class="container">
 

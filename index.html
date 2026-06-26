@@ -334,7 +334,14 @@
   @media (max-width: 620px) {
     body {
       padding: 2rem 1rem 4rem;
-      background: url('Offline.png') center center / cover scroll, #25253a;
+      background:
+        linear-gradient(rgba(20, 18, 40, 0.88), rgba(20, 18, 40, 0.88)),
+        url('Offline.png') center center / cover scroll,
+        #25253a;
+    }
+
+    body::before {
+      display: none;
     }
 
     /* Stack columns, embed first */

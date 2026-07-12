@@ -149,7 +149,8 @@
   /* Colors tile */
   .colors-row {
     display: flex;
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 12px 10px;
     margin-top: 0.7rem;
   }
   .color-chip {
@@ -157,6 +158,7 @@
     flex-direction: column;
     align-items: center;
     gap: 5px;
+    width: 66px;
   }
   .color-swatch {
     width: 34px;
@@ -299,19 +301,27 @@
         <div class="colors-row">
           <div class="color-chip">
             <div class="color-swatch" style="background: linear-gradient(135deg, #2a2a2a, #6b21a8);"></div>
-            <span>Purple</span>
+            <span>Black &amp; Purple</span>
           </div>
           <div class="color-chip">
             <div class="color-swatch" style="background: linear-gradient(135deg, #1c1c2e, #2b46c9);"></div>
-            <span>Blue</span>
+            <span>Black &amp; Blue</span>
           </div>
           <div class="color-chip">
             <div class="color-swatch" style="background: linear-gradient(135deg, #1a1a1a, #c81e1e);"></div>
-            <span>Red</span>
+            <span>Black &amp; Red</span>
           </div>
           <div class="color-chip">
             <div class="color-swatch" style="background: linear-gradient(135deg, #1a1a1a, #7ed321);"></div>
-            <span>Green</span>
+            <span>Black &amp; Green</span>
+          </div>
+          <div class="color-chip">
+            <div class="color-swatch" style="background: linear-gradient(135deg, #ffffff, #c9a3dc);"></div>
+            <span>Lilac &amp; White</span>
+          </div>
+          <div class="color-chip">
+            <div class="color-swatch" style="background: linear-gradient(135deg, #ffffff, #f2a0c2);"></div>
+            <span>Pink &amp; White</span>
           </div>
         </div>
         <p class="legacy-note">Red and green use a legacy number font that isn't made anymore. Both colors are still available, just built with the current design.</p>

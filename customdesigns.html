@@ -377,10 +377,16 @@
   }
   .intro-title {
     display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .intro-line1 {
+    display: flex;
     gap: 0.5rem;
     overflow: hidden;
   }
-  .intro-title span {
+  .intro-line1 span {
     font-family: 'Orbitron', sans-serif;
     font-size: 1.75rem;
     font-weight: 700;
@@ -393,6 +399,15 @@
   }
   .intro-creates {
     animation: slideFromRight 0.5s cubic-bezier(0.22, 1, 0.36, 1) 2.1s both;
+  }
+  .intro-sub {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    display: block;
+    animation: fadeInUp 0.5s ease-out 2.6s both;
   }
   @keyframes glitchLogo {
     0%   { opacity: 0; transform: scale(0.88); filter: brightness(0); }
@@ -461,6 +476,10 @@
     93%  { opacity: 0; transform: translateX(0); }
     100% { opacity: 0; }
   }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
   @keyframes slideFromLeft {
     from { opacity: 0; transform: translateX(-40px); }
     to   { opacity: 1; transform: translateX(0); }
@@ -477,8 +496,9 @@
   @media (max-width: 620px) {
     #intro { padding: 2rem; }
     .glitch-wrap, #introLogo { width: 200px; height: 200px; }
-    .intro-title { justify-content: center; }
-    .intro-title span { font-size: 1.3rem; }
+    .intro-line1 { justify-content: center; }
+    .intro-line1 span { font-size: 1.3rem; }
+    .intro-sub { font-size: 0.85rem; }
   }
 </style>
 </head>
@@ -488,8 +508,11 @@
     <img src="BashProfilePic.png" alt="Bash Creates" id="introLogo">
   </div>
   <div class="intro-title">
-    <span class="intro-bash">Bash</span>
-    <span class="intro-creates">Creates</span>
+    <div class="intro-line1">
+      <span class="intro-bash">Bash</span>
+      <span class="intro-creates">Creates</span>
+    </div>
+    <span class="intro-sub">Custom Designs</span>
   </div>
 </div>
 <div class="page">

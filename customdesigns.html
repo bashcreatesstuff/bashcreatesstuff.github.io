@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Custom Designs · Bash Creates</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&family=Orbitron:wght@700&family=Digital+Numbers&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -73,6 +73,33 @@
     font-size: 0.82rem;
     color: var(--muted);
     line-height: 1.55;
+  }
+
+  .print-time {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 0.9rem;
+  }
+  .print-time-label {
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .print-time-suffix {
+    font-size: 0.75rem;
+    color: var(--muted);
+    opacity: 0.75;
+  }
+  .print-time-value {
+    font-family: 'Digital Numbers', monospace;
+    font-size: 1.4rem;
+    letter-spacing: 0.06em;
+    color: #39ff14;
+    background: #0e0e1a;
+    padding: 3px 10px;
+    border-radius: 4px;
+    border: 1px solid #1e1e38;
+    text-shadow: 0 0 6px rgba(57, 255, 20, 0.55);
   }
 
   /* Bento grid */
@@ -556,6 +583,11 @@
           </div>
         </div>
         <p class="legacy-note">Red and neon green use a legacy number font that isn't made anymore. Both colors are still available, just built with the current design.</p>
+        <div class="print-time">
+          <span class="print-time-label">Total print time:</span>
+          <span class="print-time-value">~9hr 45min</span>
+          <span class="print-time-suffix">per die</span>
+        </div>
       </div>
     </div>
 

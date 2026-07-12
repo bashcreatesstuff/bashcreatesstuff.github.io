@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Custom Designs — Bash Creates</title>
+<title>Custom Designs · Bash Creates</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -45,17 +45,6 @@
     width: 100%;
     max-width: 800px;
   }
-
-  .back-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.8rem;
-    color: var(--muted);
-    text-decoration: none;
-    margin-bottom: 2rem;
-  }
-  .back-link:hover { color: var(--text); }
 
   .header { margin-bottom: 2rem; }
 
@@ -184,12 +173,57 @@
     object-fit: cover;
     border-radius: 8px;
     display: block;
+    cursor: zoom-in;
   }
 
   .photo-slot:has(.photo-img) {
     border: none;
     padding: 0;
     background: none;
+  }
+
+  /* Lightbox */
+  .lightbox {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 9, 20, 0.92);
+    z-index: 50;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    cursor: zoom-out;
+  }
+  .lightbox.open { display: flex; }
+  .lightbox img {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  }
+  .lightbox-close {
+    position: fixed;
+    top: 1.25rem;
+    right: 1.5rem;
+    color: var(--text);
+    font-size: 1.75rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    line-height: 1;
+    opacity: 0.8;
+  }
+  .lightbox-close:hover { opacity: 1; }
+
+  /* Video */
+  .video-wrap {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .video-wrap video {
+    width: 100%;
+    display: block;
   }
 
   /* Contact card */
@@ -255,19 +289,31 @@
   <header class="header">
     <img src="BashProfilePic.png" alt="Bash Creates" class="avatar">
     <h1>Custom Designs</h1>
-    <p class="tagline">Dice Vaults — giant hollow D20s that hold tons of your regular dice.</p>
+    <p class="tagline">Dice Vaults: giant hollow D20s that hold tons of your regular dice.</p>
   </header>
 
   <div class="product-card">
-    <p><strong>What these are:</strong> The <strong>Dice Vault</strong> is a large, 3D printed D20 that's hollow inside with a fitted lid. Pop the top off and stash tons of your regular dice inside — great as a display piece, a gift, or just a fun way to keep your whole collection in one place.</p>
-    <p>Every Dice Vault is designed from scratch, then printed and finished by hand, so no two are exactly alike.</p>
+    <p><strong>What these are:</strong> The <strong>Dice Vault</strong> is a large, 3D printed D20 that's hollow inside with a fitted lid. Pop the top off and stash tons of your regular dice inside. It works great as a display piece, a gift, or just a fun way to keep your whole collection in one place.</p>
+    <p>Every Dice Vault is designed from scratch, 3D printed, then assembled by hand, one at a time.</p>
   </div>
 
   <p class="section-label">Designed From Scratch</p>
   <div class="gallery" style="grid-template-columns: 1fr;">
     <div class="photo-slot" style="aspect-ratio: 16 / 9;"><img src="dice-photos/dice-vault-cad-design.jpg" alt="CAD layout of every numbered triangular panel that makes up a Dice Vault" class="photo-img"></div>
   </div>
-  <p style="font-size: 0.8rem; color: var(--muted); margin-top: 0.6rem;">Every Dice Vault starts as a full CAD model — each triangular panel is designed, numbered, and laid out before anything gets printed.</p>
+  <p style="font-size: 0.8rem; color: var(--muted); margin-top: 0.6rem;">Every Dice Vault starts as a full CAD model. Each triangular panel is designed, numbered, and laid out before anything gets printed.</p>
+
+  <p class="section-label">Time-Lapse</p>
+  <!--
+    Save your printer time-lapse as dice-photos/timelapse.mp4 and it will
+    appear here automatically.
+  -->
+  <div class="video-wrap">
+    <video controls preload="metadata">
+      <source src="dice-photos/timelapse.mp4" type="video/mp4">
+      Your browser does not support embedded video.
+    </video>
+  </div>
 
   <p class="section-label">Available Colors</p>
   <!--
@@ -293,7 +339,7 @@
       <span>Black &amp; Green</span>
     </div>
   </div>
-  <p style="font-size: 0.75rem; color: var(--muted); margin-top: 0.6rem;">Red and green shown with an older number style — new pieces use updated numerals, but both colors are still available.</p>
+  <p style="font-size: 0.75rem; color: var(--muted); margin-top: 0.6rem;">The red and green dice shown use a legacy number font that isn't made anymore. Both colors are still available, just built with the current design.</p>
 
   <p class="section-label">Photos</p>
   <div class="gallery">
@@ -314,14 +360,47 @@
     <div class="biz-name">BASH CREATES</div>
     <div class="biz-owner">(Kyle Dyck)</div>
     <a href="mailto:info@bashcreates.ca">info@bashcreates.ca</a>
-    <a href="https://bashcreates.ca/customorders">bashcreates.ca/customorders</a>
+    <a href="https://bashcreates.ca/customdesigns">bashcreates.ca/customdesigns</a>
     <a class="cta" href="mailto:info@bashcreates.ca?subject=Custom%20D20%20Dice%20Order">Email to Order</a>
   </div>
 
 </div>
 
+<div class="lightbox" id="lightbox">
+  <button class="lightbox-close" id="lightboxClose" aria-label="Close">&times;</button>
+  <img id="lightboxImg" src="" alt="">
+</div>
+
 <footer>bashcreates.ca &nbsp;·&nbsp; <a href="https://bashcreatesstuff.github.io" style="color: inherit; text-decoration: none;">bashcreatesstuff.github.io</a></footer>
+
+<script>
+  (function() {
+    var lightbox = document.getElementById('lightbox');
+    var lightboxImg = document.getElementById('lightboxImg');
+    var closeBtn = document.getElementById('lightboxClose');
+
+    document.querySelectorAll('.photo-img').forEach(function(img) {
+      img.addEventListener('click', function() {
+        lightboxImg.src = img.src;
+        lightboxImg.alt = img.alt;
+        lightbox.classList.add('open');
+      });
+    });
+
+    function closeLightbox() {
+      lightbox.classList.remove('open');
+      lightboxImg.src = '';
+    }
+
+    closeBtn.addEventListener('click', closeLightbox);
+    lightbox.addEventListener('click', function(e) {
+      if (e.target === lightbox) closeLightbox();
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeLightbox();
+    });
+  })();
+</script>
 
 </body>
 </html>
-                                                                          

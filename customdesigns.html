@@ -76,7 +76,8 @@
   }
 
   .print-time {
-    display: inline-flex;
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.6rem;
     margin-top: 0.9rem;
@@ -84,6 +85,11 @@
   .print-time-label {
     font-size: 0.85rem;
     color: var(--muted);
+  }
+  .print-time-readout {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
   }
   .print-time-suffix {
     font-size: 0.75rem;
@@ -94,6 +100,7 @@
     font-family: 'Digital Numbers', monospace;
     font-size: 1.4rem;
     letter-spacing: 0.06em;
+    white-space: nowrap;
     color: #39ff14;
     background: #0e0e1a;
     padding: 3px 10px;
@@ -347,6 +354,7 @@
     .tile-2x2, .tile-2x1, .tile-1x1, .tile-4x1 { grid-column: span 1; }
     .tile-2x2 { grid-row: span 2; }
     .tile-contact { flex-direction: column; align-items: flex-start; }
+    .print-time { flex-direction: column; align-items: flex-start; gap: 0.4rem; }
   }
 
   /* Intro splash */
@@ -587,8 +595,10 @@
         <p class="legacy-note">*The red/black and neon green/black photos show a legacy font that isn't produced anymore. Both colors however are still available, just built with the latest design.</p>
         <div class="print-time">
           <span class="print-time-label">Total print time:</span>
-          <span class="print-time-value">~9hr 45min</span>
-          <span class="print-time-suffix">per die</span>
+          <span class="print-time-readout">
+            <span class="print-time-value">~9hr 45min</span>
+            <span class="print-time-suffix">per die</span>
+          </span>
         </div>
       </div>
     </div>

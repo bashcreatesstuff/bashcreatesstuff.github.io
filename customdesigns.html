@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Custom Designs — Bash Creates</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #25253a;
+    --surface: #2e2e47;
+    --surface-hover: #35354f;
+    --border: #3d3d5c;
+    --text: #ffffff;
+    --muted: #a0a0c0;
+    --accent: #7c6fe0;
+  }
+
+  body {
+    background: url('Offline.png') center center / cover fixed, #25253a;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 3rem 1.5rem 5rem;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 18, 40, 0.88);
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 800px;
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-decoration: none;
+    margin-bottom: 2rem;
+  }
+  .back-link:hover { color: var(--text); }
+
+  .header { margin-bottom: 2rem; }
+
+  .avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    margin-bottom: 1.1rem;
+    display: block;
+    object-fit: cover;
+  }
+
+  h1 {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 2.25rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    margin-bottom: 0.6rem;
+    line-height: 1.1;
+  }
+
+  .tagline {
+    font-size: 1rem;
+    color: #c8c8e0;
+    margin-bottom: 0.5rem;
+  }
+
+  .bio p {
+    font-size: 0.9rem;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 0.4rem;
+  }
+
+  .section-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+    padding-left: 2px;
+    margin-top: 2.25rem;
+  }
+
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1.5rem 0;
+  }
+
+  /* Product intro card */
+  .product-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem 1.6rem;
+  }
+
+  .product-card p {
+    font-size: 0.9rem;
+    color: var(--muted);
+    line-height: 1.65;
+    margin-bottom: 0.75rem;
+  }
+  .product-card p:last-child { margin-bottom: 0; }
+  .product-card strong { color: var(--text); font-weight: 500; }
+
+  /* Colors */
+  .colors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+
+  .color-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 76px;
+  }
+
+  .color-swatch {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: linear-gradient(135deg, #4a4a6a, #35354f);
+  }
+
+  .color-chip span {
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  /* Photo gallery */
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  .photo-slot {
+    aspect-ratio: 1 / 1;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0.5rem;
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+
+  /* replace a .photo-slot div with e.g.
+     <img src="dice-photos/purple-d20.jpg" alt="Purple hollow D20 dice box" class="photo-img">
+     to swap in a real photo */
+  .photo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 8px;
+    display: block;
+  }
+
+  .photo-slot:has(.photo-img) {
+    border: none;
+    padding: 0;
+    background: none;
+  }
+
+  /* Contact card */
+  .contact-card {
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    padding: 1.5rem 1.6rem;
+    text-align: center;
+  }
+
+  .contact-card .biz-name {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    margin-bottom: 0.15rem;
+  }
+
+  .contact-card .biz-owner {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+
+  .contact-card a {
+    display: block;
+    font-size: 0.9rem;
+    color: #c8c8e0;
+    text-decoration: none;
+    margin-bottom: 0.35rem;
+  }
+  .contact-card a:hover { color: var(--text); }
+
+  .contact-card .cta {
+    display: inline-block;
+    margin-top: 1rem;
+    padding: 0.6rem 1.4rem;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+  .contact-card .cta:hover { background: #6a5ed0; }
+
+  footer {
+    margin-top: 3.5rem;
+    text-align: center;
+    font-size: 0.75rem;
+    color: #ffffff;
+    position: relative;
+    z-index: 2;
+    opacity: 0.7;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="header">
+    <img src="BashProfilePic.png" alt="Bash Creates" class="avatar">
+    <h1>Custom Designs</h1>
+    <p class="tagline">Dice Vaults — giant hollow D20s that hold tons of your regular dice.</p>
+  </header>
+
+  <div class="product-card">
+    <p><strong>What these are:</strong> The <strong>Dice Vault</strong> is a large, 3D printed D20 that's hollow inside with a fitted lid. Pop the top off and stash tons of your regular dice inside — great as a display piece, a gift, or just a fun way to keep your whole collection in one place.</p>
+    <p>Every Dice Vault is designed from scratch, then printed and finished by hand, so no two are exactly alike.</p>
+  </div>
+
+  <p class="section-label">Designed From Scratch</p>
+  <div class="gallery" style="grid-template-columns: 1fr;">
+    <div class="photo-slot" style="aspect-ratio: 16 / 9;"><img src="dice-photos/dice-vault-cad-design.jpg" alt="CAD layout of every numbered triangular panel that makes up a Dice Vault" class="photo-img"></div>
+  </div>
+  <p style="font-size: 0.8rem; color: var(--muted); margin-top: 0.6rem;">Every Dice Vault starts as a full CAD model — each triangular panel is designed, numbered, and laid out before anything gets printed.</p>
+
+  <p class="section-label">Available Colors</p>
+  <!--
+    Swap these placeholder swatches for your real finished colors.
+    Set background on .color-swatch (or add an inline style) to the
+    actual color, and update the label text underneath.
+  -->
+  <div class="colors">
+    <div class="color-chip">
+      <div class="color-swatch" style="background: linear-gradient(135deg, #2a2a2a, #6b21a8);"></div>
+      <span>Black &amp; Purple</span>
+    </div>
+    <div class="color-chip">
+      <div class="color-swatch" style="background: linear-gradient(135deg, #1c1c2e, #2b46c9);"></div>
+      <span>Black &amp; Blue</span>
+    </div>
+    <div class="color-chip">
+      <div class="color-swatch" style="background: linear-gradient(135deg, #1a1a1a, #c81e1e);"></div>
+      <span>Black &amp; Red</span>
+    </div>
+    <div class="color-chip">
+      <div class="color-swatch" style="background: linear-gradient(135deg, #1a1a1a, #7ed321);"></div>
+      <span>Black &amp; Green</span>
+    </div>
+  </div>
+  <p style="font-size: 0.75rem; color: var(--muted); margin-top: 0.6rem;">Red and green shown with an older number style — new pieces use updated numerals, but both colors are still available.</p>
+
+  <p class="section-label">Photos</p>
+  <div class="gallery">
+    <div class="photo-slot"><img src="dice-photos/black-purple-d20-open.jpg" alt="Black and purple Dice Vault, open, showing storage compartments and magnetic lid" class="photo-img"></div>
+    <div class="photo-slot"><img src="dice-photos/black-purple-d20-closed.jpg" alt="Black and purple Dice Vault, closed" class="photo-img"></div>
+    <div class="photo-slot"><img src="dice-photos/black-blue-d20-open.jpg" alt="Black and blue Dice Vault, open, full of dice" class="photo-img"></div>
+    <div class="photo-slot"><img src="dice-photos/black-blue-d20-closed.jpg" alt="Black and blue Dice Vault, closed" class="photo-img"></div>
+    <div class="photo-slot"><img src="dice-photos/black-red-d20-open.jpg" alt="Black and red Dice Vault, open, full of dice" class="photo-img"></div>
+    <div class="photo-slot"><img src="dice-photos/black-red-d20-closed.jpg" alt="Black and red Dice Vault, closed" class="photo-img"></div>
+    <div class="photo-slot"><img src="dice-photos/black-green-d20-open.jpg" alt="Black and green Dice Vault, open" class="photo-img"></div>
+    <div class="photo-slot"><img src="dice-photos/black-green-d20-closed.jpg" alt="Black and green Dice Vault, closed" class="photo-img"></div>
+  </div>
+
+  <hr class="divider">
+
+  <p class="section-label">Order One</p>
+  <div class="contact-card">
+    <div class="biz-name">BASH CREATES</div>
+    <div class="biz-owner">(Kyle Dyck)</div>
+    <a href="mailto:info@bashcreates.ca">info@bashcreates.ca</a>
+    <a href="https://bashcreates.ca/customorders">bashcreates.ca/customorders</a>
+    <a class="cta" href="mailto:info@bashcreates.ca?subject=Custom%20D20%20Dice%20Order">Email to Order</a>
+  </div>
+
+</div>
+
+<footer>bashcreates.ca &nbsp;·&nbsp; <a href="https://bashcreatesstuff.github.io" style="color: inherit; text-decoration: none;">bashcreatesstuff.github.io</a></footer>
+
+</body>
+</html>
+                                                                          

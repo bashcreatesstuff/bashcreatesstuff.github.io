@@ -122,7 +122,7 @@
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     grid-template-rows: minmax(210px, auto) minmax(210px, auto);
-    grid-auto-rows: 210px;
+    grid-auto-rows: minmax(210px, auto);
     gap: 14px;
   }
 
@@ -200,12 +200,28 @@
 
   .video-tile {
     grid-row: auto !important;
-    height: auto !important;
+    min-height: 420px;
+  }
+
+  .tile-4x1.video-tile {
+    height: 400px !important;
+    min-height: 0 !important;
+    overflow: hidden;
+  }
+
+  .tile-4x1.video-tile video {
+    width: 100%;
+    height: 400px;
+    object-fit: cover;
+    object-position: center 50%;
+    min-height: 0;
   }
 
   .video-tile video {
     width: 100%;
-    height: auto;
+    height: 100%;
+    min-height: inherit;
+    object-fit: cover;
     display: block;
   }
 
@@ -293,6 +309,45 @@
     color: var(--muted);
     text-align: center;
   }
+  .swatch-legend {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 0.5rem;
+    opacity: 0.8;
+  }
+  .swatch-legend-swatch {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    overflow: hidden;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #666688 60%, #ccccdd 60%);
+  }
+  .swatch-legend-labels {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .swatch-legend-labels span {
+    font-size: 0.65rem;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .swatch-legend-labels span::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .swatch-legend-face::before { background: #666688; }
+  .swatch-legend-text::before { background: #ccccdd; }
   .legacy-note {
     font-size: 0.68rem;
     color: var(--muted);
@@ -620,6 +675,13 @@
         <h1>Custom Designs</h1>
         <p class="tagline">Dice Vaults: These giant dice measure about 7 inches tall and hold TONS of your regular dice. They also make a great conversation starter and decoration piece for your TTRPG space.</p>
         <p class="blurb">Every Dice Vault is designed from scratch, 3D printed, and assembled by hand. No AI used in the design process from start to finish.</p>
+        <div class="swatch-legend">
+          <div class="swatch-legend-swatch"></div>
+          <div class="swatch-legend-labels">
+            <span class="swatch-legend-face">Face colour (top-left)</span>
+            <span class="swatch-legend-text">Text colour (bottom-right)</span>
+          </div>
+        </div>
         <div class="colors-row">
           <div class="color-chip">
             <div class="color-swatch" style="background: linear-gradient(135deg, #2a2a2a 60%, #6b21a8 60%);"></div>
@@ -725,19 +787,28 @@
       <span class="tile-caption">Dragon Red, open</span>
     </div>
 
-    <!-- RGB Lamp autoplay -->
-    <div class="tile tile-2x2 video-tile">
+    <!-- RGB Lamp autoplay - full width -->
+    <div class="tile tile-4x1 video-tile">
       <span class="tile-label">Phase Shift RGB Lamp</span>
       <video autoplay muted loop playsinline preload="auto">
-        <source src="dice-photos/RGB-Dice-web.mp4" type="video/mp4">
+        <source src="dice-photos/RGB-Dice-V2.mp4" type="video/mp4">
       </video>
     </div>
 
-    <!-- Video -->
+    <!-- Print Time-Lapse -->
     <div class="tile tile-2x2 video-tile">
-      <span class="tile-label">Time-Lapse</span>
+      <span class="tile-label">Print Time-Lapse</span>
       <video autoplay muted loop playsinline preload="auto">
         <source src="dice-photos/TimeLapse-web.mp4" type="video/mp4">
+        Your browser does not support embedded video.
+      </video>
+    </div>
+
+    <!-- Assembly Time-Lapse -->
+    <div class="tile tile-2x2 video-tile">
+      <span class="tile-label">Assembly Time-Lapse</span>
+      <video autoplay muted loop playsinline preload="auto">
+        <source src="dice-photos/BuildTimelapse-web.mp4" type="video/mp4">
         Your browser does not support embedded video.
       </video>
     </div>
@@ -765,35 +836,35 @@
     <div class="legacy-bento">
       <div class="tile tile-1x1">
         <img src="dice-photos/black-purple-d20-closed.jpg" alt="Legacy Black and Purple Dice Vault, closed" class="tile-media">
-        <span class="tile-caption">Black &amp; Purple</span>
+        <span class="tile-caption">Eldritch Purple</span>
       </div>
       <div class="tile tile-1x1">
         <img src="dice-photos/black-purple-d20-open.jpg" alt="Legacy Black and Purple Dice Vault, open" class="tile-media">
-        <span class="tile-caption">Black &amp; Purple, open</span>
+        <span class="tile-caption">Eldritch Purple, open</span>
       </div>
       <div class="tile tile-1x1">
         <img src="dice-photos/black-blue-d20-closed.jpg" alt="Legacy Black and Blue Dice Vault, closed" class="tile-media">
-        <span class="tile-caption">Black &amp; Blue</span>
+        <span class="tile-caption">Midnight Blue</span>
       </div>
       <div class="tile tile-1x1">
         <img src="dice-photos/black-blue-d20-open.jpg" alt="Legacy Black and Blue Dice Vault, open" class="tile-media">
-        <span class="tile-caption">Black &amp; Blue, open</span>
+        <span class="tile-caption">Midnight Blue, open</span>
       </div>
       <div class="tile tile-1x1">
         <img src="dice-photos/black-red-d20-closed.jpg" alt="Legacy Black and Red Dice Vault, closed" class="tile-media">
-        <span class="tile-caption">Black &amp; Red †</span>
+        <span class="tile-caption">Shadow Red †</span>
       </div>
       <div class="tile tile-1x1">
         <img src="dice-photos/black-red-d20-open.jpg" alt="Legacy Black and Red Dice Vault, open" class="tile-media">
-        <span class="tile-caption">Black &amp; Red, open †</span>
+        <span class="tile-caption">Shadow Red, open †</span>
       </div>
       <div class="tile tile-1x1">
         <img src="dice-photos/black-green-d20-closed.jpg" alt="Legacy Black and Neon Green Dice Vault, closed" class="tile-media">
-        <span class="tile-caption">Black &amp; Neon Green †</span>
+        <span class="tile-caption">Acid Green †</span>
       </div>
       <div class="tile tile-1x1">
         <img src="dice-photos/black-green-d20-open.jpg" alt="Legacy Black and Neon Green Dice Vault, open" class="tile-media">
-        <span class="tile-caption">Black &amp; Neon Green, open †</span>
+        <span class="tile-caption">Acid Green, open †</span>
       </div>
     </div>
     <p class="legacy-note-bottom">† Photos show an older font style. Current orders use the updated design.</p>

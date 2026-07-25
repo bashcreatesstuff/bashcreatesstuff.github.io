@@ -117,6 +117,28 @@
     text-shadow: 0 0 6px rgba(57, 255, 20, 0.55);
   }
 
+  .friend-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.65rem 1.2rem;
+    margin-bottom: 14px;
+    font-size: 0.85rem;
+    color: var(--muted);
+    text-align: center;
+  }
+  .friend-banner a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .friend-banner a:hover { text-decoration: underline; }
+
   /* Bento grid */
   .bento {
     display: grid;
@@ -664,6 +686,12 @@
   </div>
 </div>
 <div class="page">
+
+  <div class="friend-banner">
+    <img src="PinsomniaLogo.jpg" alt="Pinsomnia Designs logo" style="height: 48px; border-radius: 6px; object-fit: contain;">
+    <span>Also check out the incredible enamel pin designs from</span>
+    <a href="https://www.etsy.com/ca/shop/PinsomniaDesigns" target="_blank" rel="noopener">Pinsomnia Designs ↗</a>
+  </div>
 
   <div class="bento">
 

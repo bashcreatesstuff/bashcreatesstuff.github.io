@@ -117,27 +117,37 @@
     text-shadow: 0 0 6px rgba(57, 255, 20, 0.55);
   }
 
-  .friend-banner {
+  /* Pinsomnia tile */
+  .tile-pinsomnia {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 0.65rem 1.2rem;
-    margin-bottom: 14px;
-    font-size: 0.85rem;
-    color: var(--muted);
+    gap: 0.6rem;
+    padding: 1.4rem 1.8rem;
     text-align: center;
   }
-  .friend-banner a {
+  .pinsomnia-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .pinsomnia-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  .pinsomnia-caption {
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .pinsomnia-link {
+    font-size: 1rem;
+    font-weight: 600;
     color: var(--accent);
     text-decoration: none;
-    font-weight: 500;
   }
-  .friend-banner a:hover { text-decoration: underline; }
+  .pinsomnia-link:hover { text-decoration: underline; }
 
   /* Bento grid */
   .bento {
@@ -383,7 +393,6 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    flex-wrap: wrap;
     gap: 1rem;
     padding: 1.4rem 1.8rem;
   }
@@ -403,11 +412,17 @@
     font-size: 0.78rem;
     color: var(--muted);
   }
+  .tile-contact .biz-tagline {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 0.5rem;
+  }
   .tile-contact .links {
     display: flex;
-    align-items: center;
-    gap: 1rem;
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0.5rem;
   }
   .tile-contact a {
     font-size: 0.85rem;
@@ -579,6 +594,15 @@
     display: block;
     animation: fadeInUp 0.5s ease-out 2.6s both;
   }
+  .intro-credit {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 0.03em;
+    position: absolute;
+    bottom: 1.5rem;
+    left: 1.5rem;
+  }
   @keyframes glitchLogo {
     0%   { opacity: 0; transform: scale(0.88); filter: brightness(0); }
     3%   { opacity: 1; transform: scale(1.08) translateX(-8px); filter: brightness(4) hue-rotate(90deg) saturate(5); }
@@ -684,23 +708,44 @@
     </div>
     <span class="intro-sub">Custom Designs</span>
   </div>
+  <span class="intro-credit">✦ Portrait art by Sif the Artist</span>
 </div>
 <div class="page">
 
-  <div class="friend-banner">
-    <img src="Amaze.png" alt="Amazed face" style="height: 64px; border-radius: 6px; object-fit: contain;">
-    <span>← How you'll feel browsing the incredible stuff from <a href="https://www.etsy.com/ca/shop/PinsomniaDesigns" target="_blank" rel="noopener">Pinsomnia Designs ↗</a></span>
-  </div>
-
   <div class="bento">
+
+    <!-- Contact tile -->
+    <div class="tile tile-2x1 tile-contact">
+      <div class="biz">
+        <span class="biz-name">BASH CREATES</span>
+        <span class="biz-owner">(Kyle J)</span>
+        <img src="BashProfilePic.png" alt="Bash Creates logo" style="height: 96px; margin-top: 0.4rem; object-fit: contain;">
+      </div>
+      <div class="links">
+        <a href="mailto:info@bashcreates.ca">info@bashcreates.ca</a>
+        <a href="https://bashcreates.ca/customdesigns">bashcreates.ca/customdesigns</a>
+        <a class="cta" href="mailto:info@bashcreates.ca?subject=Custom%20D20%20Dice%20Order">Email to Order</a>
+        <span class="biz-tagline">🇨🇦 All items designed, printed &amp; hand assembled in Canada</span>
+      </div>
+    </div>
+
+    <!-- Pinsomnia tile -->
+    <div class="tile tile-2x1 tile-pinsomnia">
+      <div class="pinsomnia-row">
+        <img src="Amaze.png" alt="Amazed face" style="height: 90px; border-radius: 6px; object-fit: contain; flex-shrink: 0;">
+        <div class="pinsomnia-text">
+          <p class="pinsomnia-caption"><span style="font-size: 1.3rem; color: var(--accent); display: inline-block; transform: scaleX(-1);">➔</span> How you'll feel browsing the incredible stuff from</p>
+          <a href="https://www.etsy.com/ca/shop/PinsomniaDesigns" target="_blank" rel="noopener" class="pinsomnia-link">Pinsomnia Designs ↗</a>
+        </div>
+      </div>
+    </div>
 
     <!-- Info tile -->
     <div class="tile tile-2x2">
       <span class="badge-new">New &amp; Improved design for 2026!</span>
       <div class="tile-pad">
-        <img src="BashProfilePic.png" alt="Bash Creates" class="avatar">
-        <h1>Custom Designs</h1>
-        <p class="tagline">Dice Vaults: These giant dice measure about 7 inches tall and hold TONS of your regular dice. They also make a great conversation starter and decoration piece for your TTRPG space.</p>
+        <h1>Dice Vaults / RGB Lamp</h1>
+        <p class="tagline">These giant dice measure about 7 inches tall and hold TONS of your regular dice. They also make a great conversation starter and decoration piece for your TTRPG space.</p>
         <p class="blurb">Every Dice Vault is designed from scratch, 3D printed, and assembled by hand. No AI used in the design process from start to finish.</p>
         <div class="swatch-legend">
           <div class="swatch-legend-swatch"></div>
@@ -841,19 +886,6 @@
     </div>
 
     <!-- Contact -->
-    <div class="tile tile-4x1 tile-contact">
-      <div class="biz">
-        <span class="biz-name">BASH CREATES</span>
-        <span class="biz-owner">(Kyle J)</span>
-        <img src="BashProfilePic.png" alt="Bash Creates logo" style="height: 96px; margin-top: 0.4rem; object-fit: contain;">
-      </div>
-      <div class="links">
-        <a href="mailto:info@bashcreates.ca">info@bashcreates.ca</a>
-        <a href="https://bashcreates.ca/customdesigns">bashcreates.ca/customdesigns</a>
-        <a class="cta" href="mailto:info@bashcreates.ca?subject=Custom%20D20%20Dice%20Order">Email to Order</a>
-      </div>
-    </div>
-
   </div>
 
   <!-- Legacy section -->

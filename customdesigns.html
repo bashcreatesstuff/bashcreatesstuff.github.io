@@ -735,7 +735,7 @@
           <a class="cta" href="mailto:info@bashcreates.ca?subject=Custom%20D20%20Dice%20Order">Email to Order</a>
           <span style="font-size: 0.75rem; color: var(--muted); display: flex; align-items: center; gap: 0.4rem;">
             E-transfers accepted at info@bashcreates.ca
-            <button onclick="navigator.clipboard.writeText('info@bashcreates.ca').then(() => { this.innerHTML = '✓'; setTimeout(() => this.innerHTML = '<svg width=&quot;13&quot; height=&quot;13&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;2&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot;><rect x=&quot;9&quot; y=&quot;9&quot; width=&quot;13&quot; height=&quot;13&quot; rx=&quot;2&quot;/><path d=&quot;M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1&quot;/></svg>', 1500); })" title="Copy email" style="background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); cursor: pointer; padding: 3px 6px; line-height: 1; display: inline-flex; flex-direction: column; align-items: center; gap: 2px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span style="font-size: 0.55rem;">Copy</span></button>
+            <button id="copy-email-btn" title="Copy email" style="background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); cursor: pointer; padding: 3px 6px; line-height: 1; display: inline-flex; flex-direction: column; align-items: center; gap: 2px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span style="font-size: 0.55rem;">Copy</span></button>
           </span>
           <span class="biz-tagline">🇨🇦 All items designed, printed &amp; hand assembled in Canada</span>
         </div>
@@ -766,7 +766,7 @@
         <div class="swatch-legend">
           <div class="swatch-legend-swatch"></div>
           <div class="swatch-legend-labels">
-            <span class="swatch-legend-face">Face colour (top-left)</span>
+            <span class="swatch-legend-face">Body colour (top-left)</span>
             <span class="swatch-legend-text">Text colour (bottom-right)</span>
           </div>
         </div>
@@ -982,6 +982,15 @@
       if (e.key === 'Escape') closeLightbox();
     });
   })();
+
+  const copyBtn = document.getElementById('copy-email-btn');
+  const iconHTML = copyBtn.innerHTML;
+  copyBtn.addEventListener('click', function() {
+    navigator.clipboard.writeText('info@bashcreates.ca').then(() => {
+      copyBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:0.55rem;">Copied!</span>';
+      setTimeout(() => { copyBtn.innerHTML = iconHTML; }, 1500);
+    });
+  });
 </script>
 
 </body>

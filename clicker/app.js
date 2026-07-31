@@ -1858,15 +1858,17 @@ const SLIDER_DEFS = {
     { key: 'retentionLipInset', label: 'Retention lip inset (per side)', min: 0, max: 2, step: 0.02, unit: 'mm' },
     { key: 'retentionLipHeight', label: 'Retention lip height', min: 0, max: 4, step: 0.1, unit: 'mm' },
   ],
-  'group-fit': [
+  'group-bottom': [
     { key: 'bottomWall', label: 'Outer wall thickness', min: 1, max: 6, step: 0.1, unit: 'mm' },
-    { key: 'fitClearance', label: 'Fit clearance (tune per printer)', min: 0.1, max: 1, step: 0.02, unit: 'mm' },
-    { key: 'skirtDepth', label: 'Cap insertion depth', min: 2, max: 10, step: 0.2, unit: 'mm' },
-    { key: 'skirtWall', label: 'Cap wall thickness', min: 0.6, max: 3, step: 0.1, unit: 'mm' },
   ],
-  'group-top': [
+  'group-cap': [
     { key: 'capThickness', label: 'Cap thickness', min: 0.8, max: 4, step: 0.1, unit: 'mm' },
-    { key: 'postOuterR', label: 'Plunger post radius', min: 1, max: 6, step: 0.1, unit: 'mm' },
+    { key: 'skirtWall', label: 'Cap wall thickness', min: 0.6, max: 3, step: 0.1, unit: 'mm' },
+    { key: 'skirtDepth', label: 'Cap insertion depth', min: 2, max: 10, step: 0.2, unit: 'mm' },
+    { key: 'fitClearance', label: 'Fit clearance (tune per printer)', min: 0.1, max: 1, step: 0.02, unit: 'mm' },
+  ],
+  'group-stem': [
+    { key: 'postOuterR', label: 'Stem post radius', min: 1, max: 6, step: 0.1, unit: 'mm' },
     { key: 'postFilletRadius', label: 'Post-to-cap fillet (underside)', min: 0, max: 3, step: 0.1, unit: 'mm' },
     { key: 'crossWidth', label: 'Cross socket width (tip-to-tip)', min: 3, max: 6, step: 0.05, unit: 'mm' },
     { key: 'crossArmWidth', label: 'Cross socket arm width', min: 0.8, max: 2, step: 0.02, unit: 'mm' },

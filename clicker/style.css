@@ -604,3 +604,12 @@ button#resetBtn,
   line-height: 1.5;
   margin-top: 16px;
 }
+
+.hint a {
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.hint a:hover {
+  color: var(--text);
+}

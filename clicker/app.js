@@ -47,7 +47,24 @@ const DEFAULTS = {
   logoMargin: 2,           // buffer ring of plain cap material between the
                            // traced logo's outer edge and the cap's own
                            // outer edge, so the logo doesn't run right up
-                           // to the rim
+                           // to the rim (only used when outlineShape is
+                           // 'imported', i.e. the outline itself hugs the
+                           // logo's own silhouette)
+  // Logo-as-overlay controls -- independent of outline shape, these place
+  // the logo's color layers as their own inlay/emboss (same mechanism as
+  // custom text below) on top of whatever shape is picked, so a logo can
+  // sit on a plain circle/square/triangle with room left over for text,
+  // instead of only being usable as the outline shape itself.
+  logoSize: 55.5,          // mm, absolute diameter used to size the logo
+                           // layer -- deliberately NOT tied to
+                           // outlineDiameter, so resizing the overall part
+                           // doesn't drag the logo along with it. Defaults
+                           // to match the stock outlineDiameter so a fresh
+                           // project's imported-shape mode still fills its
+                           // own outline edge-to-edge like before.
+  logoOffsetX: 0,          // mm, position relative to the outline's center
+  logoOffsetY: 0,          // mm
+  logoRotation: 0,         // degrees
 
   // Custom text -- independent of outline shape/logo import, an optional
   // extra flush inlay (see textToMmLoops()/buildTop()) so a name, date,
@@ -1106,8 +1123,19 @@ function buildTop(arena, p) {
   // the face instead (prints face-up, also support-free since the raised
   // bits sit directly on solid material underneath). See DEFAULTS.engraveStyle.
   const isEmboss = p.engraveStyle === 'emboss';
-  if (p.outlineShape === 'imported' && importedLogo && p.logoEmbossHeight > 0) {
-    const R = p.outlineDiameter / 2;
+  // Independent of outline shape AND outline size -- the logo renders as
+  // its own inlay/emboss layer (same mechanism as custom text below),
+  // positioned/sized via logoSize/logoOffsetX/logoOffsetY/logoRotation,
+  // instead of only being usable when outlineShape === 'imported'. logoSize
+  // is a fixed mm value rather than a multiple of outlineDiameter on
+  // purpose, so resizing the overall part doesn't rescale the logo along
+  // with it. That shape option still exists separately for having the
+  // whole button's silhouette hug the logo's own outline -- this is what
+  // lets a logo ALSO sit on a plain circle/square/triangle, with real room
+  // left over for text, instead of needing outline shape to be the logo
+  // and a big uniform margin around it.
+  if (importedLogo && importedLogo.colorLayers.length > 0 && p.logoEmbossHeight > 0) {
+    const R = (p.logoSize || 55.5) / 2;
     // Inlay: leave at least a 0.2mm solid floor under the recess so the cap
     // doesn't get cut clean through if depth is pushed close to (or past)
     // the cap's own thickness. Emboss just adds material on top of the cap,
@@ -1117,7 +1145,9 @@ function buildTop(arena, p) {
       : Math.min(p.logoEmbossHeight, Math.max(0, p.capThickness - 0.2));
     const clippedLayers = [];
     for (const layer of importedLogo.colorLayers) {
-      const raw2D = importedLogoLayer2D(arena, layer, R);
+      let raw2D = importedLogoLayer2D(arena, layer, R);
+      if (p.logoRotation) raw2D = arena.track(raw2D.rotate(p.logoRotation));
+      raw2D = arena.track(raw2D.translate([p.logoOffsetX || 0, p.logoOffsetY || 0]));
       const clipped2D = arena.track(raw2D.intersect(capProfile));
       if (clipped2D.isEmpty()) continue;
       clippedLayers.push({ hex: layer.hex, cs: clipped2D });
@@ -1216,7 +1246,7 @@ function meshToGeometry(manifoldMesh) {
 const viewportEl = document.getElementById('viewport');
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 2000);
-camera.position.set(140, 90, 110);
+camera.position.set(-1.0920819621093647, -189.3251720712499, 174.67479227713187);
 camera.up.set(0, 0, 1);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -1224,8 +1254,14 @@ renderer.setPixelRatio(window.devicePixelRatio);
 viewportEl.appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 0, 5);
+controls.target.set(-1.5008039474487305, 0, 8.600000381469727);
 controls.enableDamping = true;
+
+// Debug hook -- module-scoped variables like `camera`/`controls` aren't
+// reachable from the devtools console otherwise, since this is a module
+// script, not a global one. Harmless to leave in.
+window.camera = camera;
+window.controls = controls;
 
 // Hemisphere light (sky/ground) gives a soft ambient gradient instead of
 // flat uniform ambient -- closer to the soft environment lighting a
@@ -1245,7 +1281,7 @@ scene.add(grid);
 // XYZ orientation indicator -- three colored arrows anchored at one grid
 // corner, purely a visual aid (not part of the model or export), same
 // red/green/blue = X/Y/Z convention as most CAD viewports.
-const AXIS_ORIGIN = new THREE.Vector3(-110, -110, 0);
+const AXIS_ORIGIN = new THREE.Vector3(-110, 110, 0);
 const AXIS_LENGTH = 25;
 const AXIS_HEAD_LENGTH = 6;
 const AXIS_HEAD_WIDTH = 3;
@@ -1267,8 +1303,137 @@ function addAxisArrow(dir, color) {
   scene.add(shaft, head);
 }
 addAxisArrow(new THREE.Vector3(1, 0, 0), 0xff3b30);
-addAxisArrow(new THREE.Vector3(0, 1, 0), 0x34c759);
+addAxisArrow(new THREE.Vector3(0, -1, 0), 0x34c759);
 addAxisArrow(new THREE.Vector3(0, 0, 1), 0x0a5fff);
+
+// ---------------------------------------------------------------------
+// View cube -- a small clickable navigation gizmo, bottom-left corner of
+// the viewport (above the mouse-hint text). Mirrors the main camera's
+// current orientation every frame, and clicking a face snaps the main
+// camera to look straight at that face while keeping the current zoom
+// distance and orbit target. Same idea as the view cube in most CAD
+// tools (Fusion 360, SolidWorks, etc.) -- implemented as a second small
+// scene + camera, drawn as an inset viewport after the main scene each
+// frame (see renderFrame()), not as part of the actual 3D model scene.
+// ---------------------------------------------------------------------
+const VIEWCUBE_SIZE = 84;       // css px, on-screen footprint
+const VIEWCUBE_MARGIN = 14;     // matches .viewport-hint's own left/bottom inset
+const VIEWCUBE_BOTTOM_GAP = 34; // clears the mouse-hint text sitting above it
+
+const viewCubeScene = new THREE.Scene();
+const viewCubeCamera = new THREE.OrthographicCamera(-1.6, 1.6, 1.6, -1.6, 0.1, 10);
+
+// Camera-relative-to-target offsets for each named view -- also doubles as
+// the face label list. Deliberately listed in BoxGeometry's own default
+// face-group order (+X, -X, +Y, -Y, +Z, -Z) so a raycast hit's
+// materialIndex maps straight back into this array with no lookup table.
+// Same R/G/B = X/Y/Z convention as the axis arrows above (Right=+X,
+// Top=+Z, etc.).
+const VIEW_DIRECTIONS = [
+  { label: 'Right', dir: new THREE.Vector3(1, 0, 0) },
+  { label: 'Left', dir: new THREE.Vector3(-1, 0, 0) },
+  { label: 'Back', dir: new THREE.Vector3(0, 1, 0) },
+  { label: 'Front', dir: new THREE.Vector3(0, -1, 0) },
+  { label: 'Top', dir: new THREE.Vector3(0, 0, 1) },
+  { label: 'Bottom', dir: new THREE.Vector3(0, 0, -1) },
+];
+
+function makeViewCubeFaceTexture(label) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#2e2e47';
+  ctx.fillRect(0, 0, 128, 128);
+  ctx.strokeStyle = '#5a5a80';
+  ctx.lineWidth = 5;
+  ctx.strokeRect(3, 3, 122, 122);
+  ctx.fillStyle = '#f0f0f7';
+  ctx.font = '600 22px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, 64, 64);
+  return new THREE.CanvasTexture(canvas);
+}
+
+const viewCubeMaterials = VIEW_DIRECTIONS.map(
+  ({ label }) => new THREE.MeshBasicMaterial({ map: makeViewCubeFaceTexture(label) })
+);
+// MeshBasicMaterial ignores lighting entirely (always renders the texture
+// at full brightness), which is exactly what a flat, always-legible label
+// needs here -- no light added to this scene since it'd be a no-op.
+const viewCubeMesh = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), viewCubeMaterials);
+viewCubeScene.add(viewCubeMesh);
+
+// Keeps the cube itself static and instead moves a SECOND camera around it
+// to match the main camera's orientation (same distance-from-target
+// direction, same up vector) -- far simpler than rotating the cube to
+// match, and gives the identical visual result.
+function updateViewCubeCamera() {
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  viewCubeCamera.position.copy(dir).multiplyScalar(4);
+  viewCubeCamera.up.copy(camera.up);
+  viewCubeCamera.lookAt(0, 0, 0);
+}
+
+function getViewCubeRect() {
+  return {
+    x: VIEWCUBE_MARGIN,
+    y: VIEWCUBE_BOTTOM_GAP,
+    width: VIEWCUBE_SIZE,
+    height: VIEWCUBE_SIZE,
+  };
+}
+
+// Renders the view cube as a small inset viewport in the corner of the
+// SAME canvas, drawn after the main scene each frame -- setViewport/
+// setScissor take plain CSS-pixel values (Three.js scales internally by
+// its own pixel ratio), same units as viewportEl.clientWidth/Height.
+function renderViewCube() {
+  const w = viewportEl.clientWidth;
+  const h = viewportEl.clientHeight;
+  if (w <= 0 || h <= 0) return;
+  updateViewCubeCamera();
+  const rect = getViewCubeRect();
+  renderer.setScissorTest(true);
+  renderer.setViewport(rect.x, rect.y, rect.width, rect.height);
+  renderer.setScissor(rect.x, rect.y, rect.width, rect.height);
+  renderer.render(viewCubeScene, viewCubeCamera);
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, w, h);
+}
+
+function renderFrame() {
+  renderer.render(scene, camera);
+  renderViewCube();
+}
+
+// Click-to-snap -- only intercepts clicks that land inside the view
+// cube's own on-screen rect, so it never interferes with orbiting/panning
+// the main model.
+const viewCubeRaycaster = new THREE.Raycaster();
+renderer.domElement.addEventListener('click', (ev) => {
+  const canvasRect = renderer.domElement.getBoundingClientRect();
+  const mx = ev.clientX - canvasRect.left;
+  // DOM events measure Y from the top; the gizmo's own rect.y (like
+  // WebGL viewports generally) is measured from the bottom -- flip here
+  // before comparing/mapping into it.
+  const myFromBottom = canvasRect.height - (ev.clientY - canvasRect.top);
+  const rect = getViewCubeRect();
+  if (mx < rect.x || mx > rect.x + rect.width || myFromBottom < rect.y || myFromBottom > rect.y + rect.height) {
+    return;
+  }
+  const ndcX = ((mx - rect.x) / rect.width) * 2 - 1;
+  const ndcY = ((myFromBottom - rect.y) / rect.height) * 2 - 1;
+  viewCubeRaycaster.setFromCamera({ x: ndcX, y: ndcY }, viewCubeCamera);
+  const hits = viewCubeRaycaster.intersectObject(viewCubeMesh);
+  if (hits.length === 0 || hits[0].face.materialIndex == null) return;
+  const view = VIEW_DIRECTIONS[hits[0].face.materialIndex];
+  if (!view) return;
+  const distance = camera.position.distanceTo(controls.target);
+  camera.position.copy(controls.target).addScaledVector(view.dir, distance);
+  controls.update();
+});
 
 // flatShading is what actually matters here: CAD/boolean geometry has
 // lots of sharp edges, and smooth (Phong) shading blends normals across
@@ -1442,7 +1607,7 @@ function resizeRenderer() {
   // canvas can paint as briefly empty (black), which shows up as a flash
   // during the panel-collapse animation (many resize events in quick
   // succession). Rendering right away closes that gap.
-  renderer.render(scene, camera);
+  renderFrame();
 }
 window.addEventListener('resize', resizeRenderer);
 
@@ -1479,7 +1644,7 @@ document.getElementById('rightPanelToggle').addEventListener('click', () => {
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
-  renderer.render(scene, camera);
+  renderFrame();
 }
 
 // ---------------------------------------------------------------------
@@ -1531,7 +1696,7 @@ function rebuild() {
 
 // Assembled/exploded is a pure view state -- not part of params/history
 // (same as the old checkbox), just now driven by a pill toggle instead.
-let assembledView = true;
+let assembledView = false; // default to Exploded so both pieces (and which one is "bottom") are visible on first load
 
 function setAssembledView(assembled) {
   assembledView = assembled;
@@ -1568,6 +1733,37 @@ function layoutParts() {
   updateReferenceSwitchVisibility();
   positionSwitchLabels();
   updateSwitchLabelVisibility();
+}
+
+// Frames the camera on whatever's actually in the scene right now, instead
+// of relying on a fixed hand-tuned position -- that fixed position was
+// only ever tuned for a single compact Assembled part near the origin, so
+// it looked wrong as soon as the default view became Exploded (two pieces
+// spread apart by outlineDiameter) or the part size changed. Keeps the
+// same viewing DIRECTION/angle as that original tuned shot (reproduced
+// here as ORIGINAL_CAMERA_DIR), just recenters on the real bounding box
+// and backs off far enough to fit it, so it keeps looking right regardless
+// of view mode or button size. Called once after the very first build --
+// not on every rebuild, so it doesn't fight a user's manual pan/zoom/orbit
+// afterward.
+const ORIGINAL_CAMERA_DIR = new THREE.Vector3(0.0016229221138499988, -0.7517579662561258, 0.6594371283862215);
+function frameCameraOnParts() {
+  if (!bottomMesh || !topMesh) return;
+  const box = new THREE.Box3().setFromObject(bottomMesh).union(new THREE.Box3().setFromObject(topMesh));
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const boundingRadius = size.length() / 2;
+
+  const vFov = (camera.fov * Math.PI) / 180;
+  const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
+  const distForHeight = boundingRadius / Math.sin(vFov / 2);
+  const distForWidth = boundingRadius / Math.sin(hFov / 2);
+  const distance = 1.3 * Math.max(distForHeight, distForWidth);
+
+  camera.position.copy(center).addScaledVector(ORIGINAL_CAMERA_DIR, distance);
+  controls.target.copy(center);
+  camera.updateProjectionMatrix();
+  controls.update();
 }
 
 // ---------------------------------------------------------------------
@@ -1900,8 +2096,12 @@ const SLIDER_DEFS = {
     { key: 'crossSocketDepth', label: 'Cross socket depth (0 = round post, no socket)', min: 0, max: 8, step: 0.2, unit: 'mm' },
   ],
   'group-logo': [
-    { key: 'logoMargin', label: 'Buffer around logo', min: 0, max: 8, step: 0.5, unit: 'mm' },
+    { key: 'logoMargin', label: 'Buffer around logo (imported-shape outline only)', min: 0, max: 8, step: 0.5, unit: 'mm' },
     { key: 'logoEmbossHeight', label: 'Emboss/recess height', min: 0.2, max: 2.5, step: 0.1, unit: 'mm' },
+    { key: 'logoSize', label: 'Logo size', min: 5, max: 90, step: 0.5, unit: 'mm' },
+    { key: 'logoOffsetX', label: 'Logo position (left/right)', min: -40, max: 40, step: 0.5, unit: 'mm' },
+    { key: 'logoOffsetY', label: 'Logo position (fwd/back)', min: -40, max: 40, step: 0.5, unit: 'mm' },
+    { key: 'logoRotation', label: 'Logo rotation', min: -180, max: 180, step: 1, unit: '°' },
   ],
 };
 
@@ -2331,8 +2531,6 @@ async function handleLogoFileSelected(file) {
   logoStatusEl.className = 'clearance';
   try {
     await importLogoFile(file);
-    params.outlineShape = 'imported';
-    shapeSelectEl.value = 'imported';
     renderLogoStatus();
     commitHistory(before);
     buildSliders();

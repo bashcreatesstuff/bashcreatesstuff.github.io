@@ -64,11 +64,24 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="12,3 4,8 4,16 12,21 20,16 20,8"></polygon></svg>
           </button>
         </div>
+        <p class="hint">
+          An uploaded logo renders as its own inlay/emboss layer on
+          whatever shape is picked above (Circle, Square, etc.), so it can
+          share the button with custom text. Pick "Imported logo" as the
+          shape instead if you'd rather the whole button's outline hug the
+          logo's own silhouette. SVG gives exact vector results. PNG works
+          too (traced + color quantized in-browser) but quality depends on
+          the source image -- flat colors and clean edges trace best.
+        </p>
+      </details>
+
+      <details>
+        <summary>Logo Position</summary>
         <div id="group-logo"></div>
         <p class="hint">
-          SVG gives exact vector results. PNG works too (traced + color
-          quantized in-browser) but quality depends on the source image --
-          flat colors and clean edges trace best.
+          Only applies once a logo is loaded above. Size and position are
+          independent of the overall diameter, so resizing the button
+          won't drag the logo along with it.
         </p>
       </details>
 
@@ -101,8 +114,8 @@
     <div id="panel">
       <div class="row">
         <div class="pill-toggle" id="viewModeToggle">
-          <button type="button" id="assembledBtn" class="active">Assembled</button>
-          <button type="button" id="explodedBtn">Exploded</button>
+          <button type="button" id="assembledBtn">Assembled</button>
+          <button type="button" id="explodedBtn" class="active">Exploded</button>
         </div>
       </div>
 

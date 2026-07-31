@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clicker Generator</title>
+<link rel="stylesheet" href="style.css" />
+
+<!--
+  Everything here runs client-side, in your browser -- no server, no build
+  step. The two heavy libraries (Three.js for the 3D viewport, Manifold for
+  the actual CAD geometry) are loaded from jsDelivr's CDN via this import
+  map, so opening index.html requires an internet connection the first
+  time (browsers cache the files after that).
+-->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/",
+    "manifold-3d": "https://cdn.jsdelivr.net/npm/manifold-3d@3.5.1/manifold.js"
+  }
+}
+</script>
+</head>
+<body>
+  <div id="app">
+    <div id="leftPanel">
+      <h1>Clicker Generator</h1>
+      <p class="tagline">Vibe coded by Claude, with minor help and supervision by <a href="https://makerworld.com/en/@BashCreates" target="_blank" rel="noopener noreferrer">Bash Creates</a> <span class="emote">&#128514;</span></p>
+      <p class="status" id="status">Loading geometry engine&hellip;</p>
+
+      <div class="row">
+        <label for="shapeSelect" class="select-label">Basic Clicker Shapes</label>
+        <select id="shapeSelect">
+          <option value="circle">Circle</option>
+          <option value="square">Square</option>
+          <option value="triangle">Triangle</option>
+          <option value="imported">Imported logo</option>
+        </select>
+      </div>
+
+      <details open>
+        <summary>Logo import</summary>
+        <label class="dropzone" id="logoDropzone" for="logoFileInput">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+          <span class="dropzone-title">Upload image</span>
+          <span class="dropzone-sub">Drop an SVG or PNG, or click to browse</span>
+          <input type="file" id="logoFileInput" accept=".svg,.png,image/svg+xml,image/png" style="display:none" />
+        </label>
+        <p class="clearance" id="logoStatus"></p>
+        <span class="select-label">Or try a sample</span>
+        <div class="sample-gallery">
+          <button type="button" class="sample-logo-btn" data-sample="heart" title="Heart">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+          </button>
+          <button type="button" class="sample-logo-btn" data-sample="star" title="Star">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14l-5-4.87 6.91-1.01L12 2z"></path></svg>
+          </button>
+          <button type="button" class="sample-logo-btn" data-sample="cross" title="Cross">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="15,3 15,9 21,9 21,15 15,15 15,21 9,21 9,15 3,15 3,9 9,9 9,3"></polygon></svg>
+          </button>
+          <button type="button" class="sample-logo-btn" data-sample="hexagon" title="Hexagon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="12,3 4,8 4,16 12,21 20,16 20,8"></polygon></svg>
+          </button>
+        </div>
+        <div id="group-logo"></div>
+        <p class="hint">
+          SVG gives exact vector results. PNG works too (traced + color
+          quantized in-browser) but quality depends on the source image --
+          flat colors and clean edges trace best.
+        </p>
+      </details>
+
+      <details open>
+        <summary>Overall size</summary>
+        <div id="group-overall"></div>
+        <p class="clearance" id="clearanceReadout"></p>
+        <p class="hint">
+          If the cavity for the switch is too close to a wall on the
+          clicker base, it will affect how thick the wall of the clicker
+          top can be. For easy printing be sure to keep this number in
+          the green.
+        </p>
+      </details>
+
+    </div>
+
+    <div id="viewport">
+      <p class="viewport-hint">Hold left mouse button to rotate, right mouse button to pan, scroll wheel in/out to zoom</p>
+    </div>
+
+    <div id="panel">
+      <div class="row">
+        <div class="pill-toggle" id="viewModeToggle">
+          <button type="button" id="assembledBtn" class="active">Assembled</button>
+          <button type="button" id="explodedBtn">Exploded</button>
+        </div>
+      </div>
+
+      <div class="row color-row">
+        <label class="color-swatch-label">
+          <span>Bottom color</span>
+          <input type="color" id="bottomColorInput" value="#9147ff">
+        </label>
+        <label class="color-swatch-label">
+          <span>Top color</span>
+          <input type="color" id="topColorInput" value="#1185fe">
+        </label>
+      </div>
+
+      <div class="row">
+        <span class="select-label">Reference switch (Exploded view only)</span>
+        <div class="pill-toggle" id="referenceSwitchToggleGroup">
+          <button type="button" id="referenceSwitchOnBtn" class="active">Show</button>
+          <button type="button" id="referenceSwitchOffBtn">Hide</button>
+        </div>
+      </div>
+
+      <details>
+        <summary>Text</summary>
+        <div class="row">
+          <label for="textContentInput" class="select-label">Text (multiple lines supported)</label>
+          <textarea id="textContentInput" rows="3" placeholder="Add a name, date, or short message&hellip;"></textarea>
+        </div>
+        <div class="row">
+          <label for="textFontSelect" class="select-label">Font</label>
+          <select id="textFontSelect">
+            <option value="Arial, Helvetica, sans-serif">Sans-serif</option>
+            <option value="'Arial Black', Arial, sans-serif">Extra Bold</option>
+            <option value="Verdana, Geneva, sans-serif">Wide</option>
+            <option value="'Century Gothic', sans-serif">Geometric</option>
+            <option value="'Comic Sans MS', cursive">Casual</option>
+            <option value="'Trebuchet MS', sans-serif">Rounded</option>
+          </select>
+        </div>
+        <div class="row color-row">
+          <label class="color-swatch-label">
+            <span>Text color</span>
+            <input type="color" id="textColorInput" value="#f0f0f7">
+          </label>
+        </div>
+        <div id="group-text"></div>
+        <p class="hint">
+          Text is inlaid flush into the top surface, the same way an
+          imported logo's colors are, so it won't need supports when
+          printed logo-side-down. Works alongside any shape, including an
+          imported logo. The font choices here favor thick, even strokes
+          -- serif and script fonts tend to fill in or break off at small
+          sizes, so they're left out.
+        </p>
+      </details>
+
+      <details class="advanced-drawer">
+        <summary>Advanced Settings</summary>
+
+        <details>
+          <summary>Switch Cavity</summary>
+          <div class="row">
+            <button id="stockMxBtn" class="secondary-btn">Use stock Cherry MX dimensions</button>
+          </div>
+          <div id="group-switch"></div>
+        </details>
+
+        <details>
+          <summary>Fit &amp; skirt</summary>
+          <div id="group-fit"></div>
+        </details>
+
+        <details>
+          <summary>Top cap / plunger</summary>
+          <div id="group-top"></div>
+        </details>
+      </details>
+
+      <div class="row buttons">
+        <button id="export3mfBtn">Download 3mf</button>
+      </div>
+      <div class="row buttons">
+        <button id="saveProjectBtn" class="secondary-btn">Save Project</button>
+        <button id="loadProjectBtn" class="secondary-btn">Load Project</button>
+        <input type="file" id="loadProjectInput" accept="application/json,.json" style="display:none" />
+      </div>
+      <div class="row buttons icon-buttons">
+        <button id="undoBtn" class="icon-btn secondary-btn" disabled title="Undo">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
+          <span>Undo</span>
+        </button>
+        <button id="redoBtn" class="icon-btn secondary-btn" disabled title="Redo">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"></polyline><path d="M4 20v-7a4 4 0 0 1 4-4h12"></path></svg>
+          <span>Redo</span>
+        </button>
+        <button id="resetBtn" class="icon-btn secondary-btn" title="Reset to defaults">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+          <span>Reset</span>
+        </button>
+      </div>
+
+      <hr class="panel-divider" />
+
+      <a class="boost-link" href="https://makerworld.com/en/@BashCreates/upload" target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+        Boost on MakerWorld
+      </a>
+      <p class="hint">
+        Free to use for personal or commercial projects, no attribution or
+        payment required. If you'd like to say thanks, a donation or Boost
+        is appreciated, but never required.
+      </p>
+      <p class="hint">
+        Reference switch model: "Cherry MX reference 2020" by Hondrus31
+        (a refinement of an earlier model by gcb), via
+        <a href="https://www.thingiverse.com/thing:4141269" target="_blank" rel="noopener noreferrer">Thingiverse</a>.
+      </p>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -2246,6 +2246,8 @@ document.getElementById('explodedBtn').addEventListener('click', () => setAssemb
 // Viewport display colors -- purely cosmetic (not part of params/history
 // or the exported 3mf, which always uses the printer's loaded filament),
 // just lets the preview be told apart more easily / match your filament.
+const DEFAULT_BOTTOM_COLOR = '#9147ff';
+const DEFAULT_TOP_COLOR = '#1185fe';
 document.getElementById('bottomColorInput').addEventListener('input', (ev) => {
   material.color.set(ev.target.value);
 });
@@ -2485,6 +2487,10 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   textContentEl.value = params.textContent;
   textColorInputEl.value = params.textColor;
   textFontEl.value = params.textFont;
+  document.getElementById('bottomColorInput').value = DEFAULT_BOTTOM_COLOR;
+  document.getElementById('topColorInput').value = DEFAULT_TOP_COLOR;
+  material.color.set(DEFAULT_BOTTOM_COLOR);
+  topMaterial.color.set(DEFAULT_TOP_COLOR);
   buildSliders();
   buildSwitchList();
   commitHistory(before);

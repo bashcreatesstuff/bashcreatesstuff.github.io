@@ -21,11 +21,13 @@ html, body {
   display: flex;
   height: 100vh;
   width: 100vw;
+  position: relative;
 }
 
 #viewport {
   flex: 1 1 auto;
   position: relative;
+  overflow: hidden;
   background: radial-gradient(circle at 50% 40%, #2a2a45 0%, #14141f 100%);
 }
 
@@ -47,6 +49,16 @@ html, body {
   padding: 18px 20px 40px;
   background: var(--panel-bg);
   border-left: 1px solid var(--border);
+  transition: width 0.18s ease, flex-basis 0.18s ease, padding 0.18s ease;
+}
+
+#panel.collapsed {
+  width: 0;
+  flex: 0 0 0;
+  padding-left: 0;
+  padding-right: 0;
+  overflow: hidden;
+  border-left: none;
 }
 
 #leftPanel {
@@ -57,6 +69,68 @@ html, body {
   padding: 18px 20px 16px;
   background: var(--panel-bg);
   border-right: 1px solid var(--border);
+  transition: width 0.18s ease, flex-basis 0.18s ease, padding 0.18s ease;
+}
+
+#leftPanel.collapsed {
+  width: 0;
+  flex: 0 0 0;
+  padding-left: 0;
+  padding-right: 0;
+  overflow: hidden;
+  border-right: none;
+}
+
+.panel-toggle {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
+  width: 16px;
+  height: 44px;
+  background: var(--border);
+  color: var(--muted);
+  border: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: left 0.18s ease, right 0.18s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.panel-toggle:hover {
+  color: var(--text);
+  background: var(--accent);
+  filter: none;
+}
+
+#leftPanelToggle {
+  left: 360px;
+  border-radius: 0 6px 6px 0;
+}
+
+#leftPanelToggle.is-collapsed {
+  left: 0;
+}
+
+#rightPanelToggle {
+  right: 340px;
+  border-radius: 6px 0 0 6px;
+}
+
+#rightPanelToggle.is-collapsed {
+  right: 0;
+}
+
+.panel-toggle svg {
+  width: 12px;
+  height: 12px;
+  transition: transform 0.18s ease;
+}
+
+.panel-toggle.is-collapsed svg {
+  transform: rotate(180deg);
 }
 
 #panel h1,

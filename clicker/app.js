@@ -1212,11 +1212,48 @@ let logoLayerMeshes = []; // one per detected logo color, kept as separate
 function resizeRenderer() {
   const w = viewportEl.clientWidth;
   const h = viewportEl.clientHeight;
+  if (w <= 0 || h <= 0) return; // mid-collapse, nothing useful to size to yet
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  // Resizing clears the canvas immediately -- without this, there's a gap
+  // between that clear and the next requestAnimationFrame tick where the
+  // canvas can paint as briefly empty (black), which shows up as a flash
+  // during the panel-collapse animation (many resize events in quick
+  // succession). Rendering right away closes that gap.
+  renderer.render(scene, camera);
 }
 window.addEventListener('resize', resizeRenderer);
+
+// Also watch the viewport element directly -- catches size changes that
+// don't fire a window 'resize' event, like the collapsible side panels
+// animating open/closed (keeps the 3D view resizing smoothly through
+// the whole transition instead of only snapping at the end).
+if (typeof ResizeObserver !== 'undefined') {
+  new ResizeObserver(() => resizeRenderer()).observe(viewportEl);
+}
+
+function setLeftPanelCollapsed(collapsed) {
+  document.getElementById('leftPanel').classList.toggle('collapsed', collapsed);
+  const btn = document.getElementById('leftPanelToggle');
+  btn.classList.toggle('is-collapsed', collapsed);
+  btn.title = collapsed ? 'Expand panel' : 'Collapse panel';
+  btn.setAttribute('aria-label', collapsed ? 'Expand left panel' : 'Collapse left panel');
+}
+document.getElementById('leftPanelToggle').addEventListener('click', () => {
+  setLeftPanelCollapsed(!document.getElementById('leftPanel').classList.contains('collapsed'));
+});
+
+function setRightPanelCollapsed(collapsed) {
+  document.getElementById('panel').classList.toggle('collapsed', collapsed);
+  const btn = document.getElementById('rightPanelToggle');
+  btn.classList.toggle('is-collapsed', collapsed);
+  btn.title = collapsed ? 'Expand panel' : 'Collapse panel';
+  btn.setAttribute('aria-label', collapsed ? 'Expand right panel' : 'Collapse right panel');
+}
+document.getElementById('rightPanelToggle').addEventListener('click', () => {
+  setRightPanelCollapsed(!document.getElementById('panel').classList.contains('collapsed'));
+});
 
 function animate() {
   requestAnimationFrame(animate);

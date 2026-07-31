@@ -1375,8 +1375,12 @@ for (let i = 0; i < MAX_SWITCHES; i++) {
 let showSwitchLabels = false; // UI toggle state, not part of params/history
 
 function updateSwitchLabelVisibility() {
+  // Labels exist to identify which reference switch is which, so hiding
+  // the reference switches should hide the labels too, even if the label
+  // toggle itself is still set to Show.
+  const show = showSwitchLabels && showReferenceSwitch;
   for (let i = 0; i < switchLabelSprites.length; i++) {
-    switchLabelSprites[i].visible = showSwitchLabels && i < params.switches.length;
+    switchLabelSprites[i].visible = show && i < params.switches.length;
   }
 }
 
@@ -1851,22 +1855,16 @@ const SLIDER_DEFS = {
     { key: 'switchL', label: 'Switch length', min: 10, max: 20, step: 0.1, unit: 'mm' },
     { key: 'pocketClearance', label: 'Cavity clearance', min: 0, max: 1, step: 0.05, unit: 'mm' },
     { key: 'pocketCornerR', label: 'Cavity corner radius', min: 0, max: 3, step: 0.1, unit: 'mm' },
-    { key: 'pocketDepth', label: 'Cavity depth', min: 3, max: 14, step: 0.2, unit: 'mm' },
-    { key: 'pocketFloor', label: 'Cavity floor thickness', min: 0.6, max: 4, step: 0.1, unit: 'mm' },
     { key: 'retentionLipInset', label: 'Retention lip inset (per side)', min: 0, max: 2, step: 0.02, unit: 'mm' },
     { key: 'retentionLipHeight', label: 'Retention lip height', min: 0, max: 4, step: 0.1, unit: 'mm' },
-    { key: 'chamferHeight', label: 'Lip chamfer height', min: 0, max: 2, step: 0.05, unit: 'mm' },
   ],
   'group-fit': [
     { key: 'bottomWall', label: 'Outer wall thickness', min: 1, max: 6, step: 0.1, unit: 'mm' },
-    { key: 'recessDepth', label: 'Recess depth', min: 3, max: 14, step: 0.2, unit: 'mm' },
     { key: 'fitClearance', label: 'Fit clearance (tune per printer)', min: 0.1, max: 1, step: 0.02, unit: 'mm' },
-    { key: 'restProtrusion', label: 'Button stand-proud height (measured)', min: 0, max: 14, step: 0.1, unit: 'mm' },
-    { key: 'skirtDepth', label: 'Skirt insertion depth', min: 2, max: 10, step: 0.2, unit: 'mm' },
-    { key: 'skirtWall', label: 'Skirt wall thickness', min: 0.6, max: 3, step: 0.1, unit: 'mm' },
+    { key: 'skirtDepth', label: 'Cap insertion depth', min: 2, max: 10, step: 0.2, unit: 'mm' },
+    { key: 'skirtWall', label: 'Cap wall thickness', min: 0.6, max: 3, step: 0.1, unit: 'mm' },
   ],
   'group-top': [
-    { key: 'topHeight', label: 'Top piece height', min: 4, max: 16, step: 0.2, unit: 'mm' },
     { key: 'capThickness', label: 'Cap thickness', min: 0.8, max: 4, step: 0.1, unit: 'mm' },
     { key: 'postOuterR', label: 'Plunger post radius', min: 1, max: 6, step: 0.1, unit: 'mm' },
     { key: 'postFilletRadius', label: 'Post-to-cap fillet (underside)', min: 0, max: 3, step: 0.1, unit: 'mm' },
@@ -2110,7 +2108,7 @@ function buildSwitchList() {
       removeBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
       removeBtn.addEventListener('click', () => {
         const before = snapshotState();
-        params.switches.splice(i, 1);
+        params.switches = params.switches.filter((_, idx) => idx !== i);
         commitHistory(before);
         buildSwitchList();
         rebuild();
@@ -2123,13 +2121,13 @@ function buildSwitchList() {
       label: 'Position (left/right)',
       min: -45, max: 45, step: 0.1, unit: 'mm',
       getValue: () => params.switches[i].x,
-      setValue: (v) => { params.switches[i].x = v; },
+      setValue: (v) => { params.switches = params.switches.map((s, idx) => idx === i ? { ...s, x: v } : s); },
     }));
     entry.appendChild(createSliderRow({
       label: 'Position (fwd/back, +up/-toward base)',
       min: -45, max: 45, step: 0.1, unit: 'mm',
       getValue: () => params.switches[i].y,
-      setValue: (v) => { params.switches[i].y = v; },
+      setValue: (v) => { params.switches = params.switches.map((s, idx) => idx === i ? { ...s, y: v } : s); },
     }));
 
     container.appendChild(entry);
@@ -2234,7 +2232,7 @@ document.getElementById('addSwitchBtn').addEventListener('click', () => {
   // directly on top of an existing switch.
   const last = params.switches[params.switches.length - 1];
   const gap = params.switchW + 2 * params.pocketClearance + 4;
-  params.switches.push({ x: last.x + gap, y: last.y });
+  params.switches = [...params.switches, { x: last.x + gap, y: last.y }];
   commitHistory(before);
   buildSwitchList();
   rebuild();
@@ -2457,6 +2455,14 @@ function setShowReferenceSwitch(show) {
   document.getElementById('referenceSwitchOnBtn').classList.toggle('active', show);
   document.getElementById('referenceSwitchOffBtn').classList.toggle('active', !show);
   updateReferenceSwitchVisibility();
+  if (!show) {
+    // Labels only make sense alongside the reference switches they
+    // identify -- hiding the switches should visibly flip the label
+    // pill toggle to Hide too, not just silently stop rendering them.
+    setShowSwitchLabels(false);
+  } else {
+    updateSwitchLabelVisibility();
+  }
 }
 document.getElementById('referenceSwitchOnBtn').addEventListener('click', () => setShowReferenceSwitch(true));
 document.getElementById('referenceSwitchOffBtn').addEventListener('click', () => setShowReferenceSwitch(false));

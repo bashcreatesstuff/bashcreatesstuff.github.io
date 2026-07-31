@@ -345,6 +345,31 @@ details summary {
   flex: none;
 }
 
+.bmc-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #ffdd00;
+  color: #000000;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 0 0 14px;
+}
+
+.bmc-link:hover {
+  filter: brightness(1.08);
+}
+
+.bmc-link svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
 .panel-divider {
   border: none;
   border-top: 1px solid var(--border);

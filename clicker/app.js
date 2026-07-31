@@ -1095,7 +1095,7 @@ function meshToGeometry(manifoldMesh) {
 const viewportEl = document.getElementById('viewport');
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 2000);
-camera.position.set(90, -140, 110);
+camera.position.set(140, 90, 110);
 camera.up.set(0, 0, 1);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -1120,6 +1120,17 @@ scene.add(fill);
 const grid = new THREE.GridHelper(150, 15, 0x45456a, 0x28283f);
 grid.rotation.x = Math.PI / 2;
 scene.add(grid);
+
+// XYZ orientation indicator -- three colored arrows anchored at one grid
+// corner, purely a visual aid (not part of the model or export), same
+// red/green/blue = X/Y/Z convention as most CAD viewports.
+const AXIS_ORIGIN = new THREE.Vector3(-70, -70, 0);
+const AXIS_LENGTH = 25;
+const AXIS_HEAD_LENGTH = 6;
+const AXIS_HEAD_WIDTH = 3;
+scene.add(new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), AXIS_ORIGIN, AXIS_LENGTH, 0xff3b30, AXIS_HEAD_LENGTH, AXIS_HEAD_WIDTH));
+scene.add(new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), AXIS_ORIGIN, AXIS_LENGTH, 0x34c759, AXIS_HEAD_LENGTH, AXIS_HEAD_WIDTH));
+scene.add(new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), AXIS_ORIGIN, AXIS_LENGTH, 0x0a5fff, AXIS_HEAD_LENGTH, AXIS_HEAD_WIDTH));
 
 // flatShading is what actually matters here: CAD/boolean geometry has
 // lots of sharp edges, and smooth (Phong) shading blends normals across

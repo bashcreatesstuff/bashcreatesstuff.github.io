@@ -1,10 +1,10 @@
 :root {
-  --bg: #1a1a2e;
-  --panel-bg: #25253a;
-  --text: #f0f0f7;
-  --muted: #a0a0c0;
-  --accent: #7c6fe0;
-  --border: #3d3d5c;
+  --bg: #1b1d21;
+  --panel-bg: #24262b;
+  --text: #e7e7ea;
+  --muted: #9a9ca3;
+  --accent: #5b8cff;
+  --border: #33363c;
 }
 
 * { box-sizing: border-box; }
@@ -26,18 +26,7 @@ html, body {
 #viewport {
   flex: 1 1 auto;
   position: relative;
-  background: radial-gradient(circle at 50% 40%, #2a2a45 0%, #14141f 100%);
-}
-
-.viewport-hint {
-  position: absolute;
-  left: 14px;
-  bottom: 12px;
-  margin: 0;
-  font-size: 11px;
-  color: rgba(231, 231, 234, 0.55);
-  pointer-events: none;
-  user-select: none;
+  background: radial-gradient(circle at 50% 40%, #2c2f36 0%, #17181b 100%);
 }
 
 #panel {
@@ -49,55 +38,19 @@ html, body {
   border-left: 1px solid var(--border);
 }
 
-#leftPanel {
-  width: 280px;
-  flex: 0 0 280px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 18px 20px 16px;
-  background: var(--panel-bg);
-  border-right: 1px solid var(--border);
-}
-
-#panel h1,
-#leftPanel h1 {
+#panel h1 {
   font-size: 18px;
   margin: 0 0 4px;
 }
 
-.tagline {
-  font-size: 11px;
-  font-style: italic;
-  color: var(--muted);
-  margin: 0 0 10px;
-}
-
-.tagline a {
-  color: var(--muted);
-  text-decoration: underline;
-}
-
-.tagline a:hover {
-  color: var(--text);
-}
-
-.tagline .emote {
-  font-style: normal;
-  display: inline-block;
-}
-
 .status {
-  /* Hidden -- kept in the DOM (not deleted) because rebuild()/main()
-     still write status/error text into it; just no longer shown, since
-     the happy-path "Ready" text was just taking up vertical space.
-     Failures are still logged to the console via the same code paths. */
-  display: none;
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 14px;
 }
 
 .clearance {
   font-size: 12px;
-  line-height: 1.4;
-  min-height: 1.4em;
   margin: -8px 0 14px;
   font-weight: 600;
 }
@@ -119,51 +72,6 @@ details summary {
   padding: 6px 0;
 }
 
-/* Nested drawers inside "Advanced Settings" -- tighten up their own
-   border/margin so they read as children of the drawer instead of full
-   siblings of it. Heading color intentionally left at the default so it
-   matches every other section heading. */
-.advanced-drawer details {
-  margin: 10px 0 0;
-}
-
-.dropzone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  border: 2px dashed var(--border);
-  border-radius: 8px;
-  padding: 18px 12px;
-  margin: 10px 0;
-  cursor: pointer;
-  text-align: center;
-  color: var(--muted);
-}
-
-.dropzone:hover,
-.dropzone.dragover {
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.dropzone svg {
-  width: 26px;
-  height: 26px;
-  margin-bottom: 4px;
-}
-
-.dropzone-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.dropzone-sub {
-  font-size: 11px;
-}
-
 .row {
   margin: 10px 0;
 }
@@ -174,68 +82,15 @@ details summary {
 
 .slider-row label {
   display: flex;
-  align-items: center;
   justify-content: space-between;
   font-size: 12px;
   color: var(--muted);
   margin-bottom: 4px;
-  min-height: 20px;
-}
-
-.slider-row label span.name {
-  min-width: 0;
 }
 
 .slider-row label span.val {
   color: var(--text);
   font-variant-numeric: tabular-nums;
-  cursor: pointer;
-  border-bottom: 1px dotted transparent;
-  white-space: nowrap;
-  flex-shrink: 0;
-  margin-left: 8px;
-  line-height: 18px;
-  /* Reserve the same footprint as .val-edit (width + margin) at all
-     times, editing or not -- otherwise swapping the narrower text span
-     for the wider input steals horizontal space from the name label,
-     which can push it onto an extra wrapped line and shift everything
-     below it down. Explicit height (border-box, so the border-bottom is
-     absorbed into it rather than adding to it) keeps this pixel-for-
-     pixel identical to .val-edit's box, so clicking to edit doesn't
-     nudge the row's height by even a hair. */
-  min-width: 68px;
-  height: 20px;
-  text-align: right;
-  box-sizing: border-box;
-  display: inline-block;
-}
-
-.slider-row label span.val:hover {
-  border-bottom-color: var(--muted);
-}
-
-.slider-row .val-edit {
-  width: 68px;
-  height: 20px;
-  box-sizing: border-box;
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  font-size: 12px;
-  line-height: 1;
-  padding: 0 6px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  -moz-appearance: textfield;
-  flex-shrink: 0;
-  margin-left: 8px;
-}
-
-.slider-row .val-edit::-webkit-outer-spin-button,
-.slider-row .val-edit::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
 }
 
 .slider-row input[type="range"] {
@@ -243,169 +98,21 @@ details summary {
   accent-color: var(--accent);
 }
 
-.slider-row.is-disabled {
-  opacity: 0.4;
-}
-
-.slider-row.is-disabled input[type="range"] {
-  cursor: not-allowed;
-}
-
-.select-label,
-.section-label {
+.select-label {
   display: block;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin: 0 0 8px;
-}
-
-.pill-toggle {
-  display: flex;
-  background: #1a1a2e;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 3px;
-  gap: 3px;
-}
-
-.pill-toggle button {
-  flex: 1;
-  background: transparent;
-  color: var(--muted);
-  border-radius: 6px;
-  padding: 7px 8px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.pill-toggle button:hover {
-  filter: none;
-  color: var(--text);
-}
-
-.pill-toggle button.active {
-  background: var(--accent);
-  color: white;
-}
-
-.color-row {
-  display: flex;
-  gap: 10px;
-}
-
-.color-swatch-label {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
   font-size: 12px;
   color: var(--muted);
-  background: #1a1a2e;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 8px;
-}
-
-.color-swatch-label input[type="color"] {
-  width: 28px;
-  height: 24px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: transparent;
-  cursor: pointer;
-}
-
-.boost-link {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  background: #00AE42;
-  color: white;
-  text-decoration: none;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 6px;
-  padding: 8px 10px;
-  margin: 0 0 14px;
-}
-
-.boost-link:hover {
-  filter: brightness(1.08);
-}
-
-.boost-link svg {
-  width: 14px;
-  height: 14px;
-  flex: none;
-}
-
-.panel-divider {
-  border: none;
-  border-top: 1px solid var(--border);
-  margin: 4px 0 16px;
-}
-
-.section-num {
-  color: var(--muted);
-  margin-right: 6px;
-}
-
-.sample-gallery {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-  margin: 10px 0;
-}
-
-.sample-logo-btn {
-  aspect-ratio: 1;
-  background: #1a1a2e;
-  color: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.sample-logo-btn:hover {
-  border-color: var(--accent);
-  color: var(--text);
-  filter: none;
-}
-
-.sample-logo-btn svg {
-  width: 100%;
-  height: 100%;
+  margin-bottom: 4px;
 }
 
 select {
   width: 100%;
-  background: #1a1a2e;
+  background: #1b1d21;
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 7px 8px;
   font-size: 13px;
-}
-
-textarea {
-  width: 100%;
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 7px 8px;
-  font-size: 13px;
-  font-family: inherit;
-  resize: vertical;
 }
 
 .buttons {
@@ -428,31 +135,9 @@ button:hover {
   filter: brightness(1.08);
 }
 
-button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  filter: none;
-}
-
 button#resetBtn,
 .secondary-btn {
-  background: #2e2e47;
-}
-
-.icon-btn {
-  flex: 1;
-  height: 56px;
-  padding: 4px 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-}
-
-.icon-btn span {
-  font-size: 10px;
-  font-weight: 600;
+  background: #3a3d44;
 }
 
 .hint {

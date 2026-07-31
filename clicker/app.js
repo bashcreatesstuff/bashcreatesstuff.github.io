@@ -63,12 +63,13 @@ const DEFAULTS = {
                            // typical 1-1.2mm print-fillet default)
   pocketDepth: 7.8,        // total socket depth: lower cavity + chamfer + lip
   pocketFloor: 1.6,        // solid floor under the switch
-  pocketOffsetX: 0,        // switch (+ plunger post) position relative to the
-  pocketOffsetY: 0,        // outline's center -- useful for asymmetric shapes
-                           // (a triangle, or later an imported logo) where the
-                           // middle isn't where the most material is. The
-                           // outer shell/skirt always stays centered on the
-                           // outline; only the switch + post move.
+  // One or more switch positions (up to MAX_SWITCHES), each { x, y } in mm
+  // relative to the outline's center -- useful for asymmetric shapes (a
+  // triangle, or an imported logo) where the middle isn't where the most
+  // material is. The outer shell/skirt always stays centered on the
+  // outline; only the switch cavities/posts move. Multiple entries here
+  // is what makes a multi-button part possible.
+  switches: [{ x: 0, y: 0 }],
 
   // The reference pocket isn't one constant width -- see buildBottom()
   // below. These three describe the narrower "retention lip" step near
@@ -760,15 +761,23 @@ function crossSocket2D(arena, width, armWidth) {
   return arena.track(CrossSection.union(horiz, vert));
 }
 
-function switchPocket2D(arena, p) {
+// Union of every switch's pocket outline (just one, most of the time) --
+// used by the wall-clearance and switch-spacing checks below, which only
+// need the 2D footprint, not the full 3D pocket geometry buildBottom()
+// builds.
+function allSwitchPockets2D(arena, p) {
   const base = roundedRect(
     arena,
     p.switchW + 2 * p.pocketClearance,
     p.switchL + 2 * p.pocketClearance,
     p.pocketCornerR
   );
-  if (p.pocketOffsetX === 0 && p.pocketOffsetY === 0) return base;
-  return arena.track(base.translate([p.pocketOffsetX, p.pocketOffsetY]));
+  let union = null;
+  for (const sw of p.switches) {
+    const one = (sw.x === 0 && sw.y === 0) ? base : arena.track(base.translate([sw.x, sw.y]));
+    union = union ? arena.track(CrossSection.union(union, one)) : one;
+  }
+  return union;
 }
 
 // ---------------------------------------------------------------------
@@ -786,7 +795,7 @@ function switchPocket2D(arena, p) {
 // wall, for any shape.
 function computeMinPocketClearance(p) {
   const arena = makeArena();
-  const pocket = switchPocket2D(arena, p);
+  const pocket = allSwitchPockets2D(arena, p);
   const recessProfile = offsetOf(arena, outline2D(arena, p), -p.bottomWall);
 
   function fitsAtOffset(d) {
@@ -830,6 +839,81 @@ function updateClearanceReadout(clearanceMm) {
   }
 }
 
+// Same binary-search-by-offset trick as computeMinPocketClearance above,
+// but between each PAIR of switch pockets instead of one pocket and the
+// recess wall -- growing both pockets together until they touch tells
+// you exactly how much physical gap separates them. Only meaningful
+// with 2+ switches; returns Infinity otherwise so the readout can hide.
+function computeMinSwitchSpacing(p) {
+  if (p.switches.length < 2) return Infinity;
+  const arena = makeArena();
+  const base = roundedRect(
+    arena,
+    p.switchW + 2 * p.pocketClearance,
+    p.switchL + 2 * p.pocketClearance,
+    p.pocketCornerR
+  );
+
+  function pocketAt(sw) {
+    return arena.track(base.translate([sw.x, sw.y]));
+  }
+
+  let minGap = Infinity;
+  for (let i = 0; i < p.switches.length; i++) {
+    for (let j = i + 1; j < p.switches.length; j++) {
+      const a = pocketAt(p.switches[i]);
+      const b = pocketAt(p.switches[j]);
+
+      function touchingAtOffset(d) {
+        const ea = arena.track(a.offset(d, 'Round', 2, SEGMENTS));
+        const eb = arena.track(b.offset(d, 'Round', 2, SEGMENTS));
+        const overlap = arena.track(ea.intersect(eb));
+        return !overlap.isEmpty();
+      }
+
+      let gap;
+      if (touchingAtOffset(0)) {
+        gap = 0;
+      } else {
+        let lo = 0;
+        let hi = 30;
+        if (!touchingAtOffset(hi)) {
+          gap = hi * 2;
+        } else {
+          for (let k = 0; k < 14; k++) {
+            const mid = (lo + hi) / 2;
+            if (touchingAtOffset(mid)) hi = mid; else lo = mid;
+          }
+          gap = lo * 2; // each pocket grew by `lo` toward the other to meet
+        }
+      }
+      minGap = Math.min(minGap, gap);
+    }
+  }
+  arena.disposeAll();
+  return minGap;
+}
+
+function updateSwitchSpacingReadout(minGapMm) {
+  const el = document.getElementById('switchSpacingReadout');
+  if (!Number.isFinite(minGapMm)) {
+    el.textContent = '';
+    el.className = 'clearance';
+    return;
+  }
+  el.classList.remove('ok', 'warn', 'bad');
+  if (minGapMm < 1.2) {
+    el.classList.add('bad');
+    el.textContent = 'Switch Spacing: Too Thin';
+  } else if (minGapMm < 2.5) {
+    el.classList.add('warn');
+    el.textContent = 'Switch Spacing: Close';
+  } else {
+    el.classList.add('ok');
+    el.textContent = 'Switch Spacing: Safe';
+  }
+}
+
 // ---------------------------------------------------------------------
 // Bottom piece
 // ---------------------------------------------------------------------
@@ -850,38 +934,42 @@ function buildBottom(arena, p) {
   const lipCornerR = Math.max(0, p.pocketCornerR - p.retentionLipInset);
   const lowerH = Math.max(0.1, p.pocketDepth - p.chamferHeight - p.retentionLipHeight);
 
-  // Lower cavity -- the switch body's own footprint, sitting on the floor.
-  const lowerProfile = roundedRect(arena, mainW, mainL, p.pocketCornerR);
-  const lowerCavity = arena.track(
-    arena.track(lowerProfile.extrude(lowerH + 0.3))
-      .translate([p.pocketOffsetX, p.pocketOffsetY, p.pocketFloor - 0.15])
-  );
+  // One switch pocket (lower cavity + chamfer + retention lip) per entry
+  // in p.switches, unioned together before being cut from the shell --
+  // same per-switch construction as a single switch always used, just
+  // repeated at each position.
+  let pocket = null;
+  for (const sw of p.switches) {
+    // Lower cavity -- the switch body's own footprint, sitting on the floor.
+    const lowerProfile = roundedRect(arena, mainW, mainL, p.pocketCornerR);
+    const lowerCavity = arena.track(
+      arena.track(lowerProfile.extrude(lowerH + 0.3))
+        .translate([sw.x, sw.y, p.pocketFloor - 0.15])
+    );
 
-  // Chamfer -- a straight loft from the main footprint down to the lip
-  // footprint, built with extrude's own scaleTop so it's one solid taper
-  // instead of two profiles stitched by hand. Built centered (no XY
-  // offset) so the scale happens around the profile's own middle, then
-  // the whole result is translated into place afterward.
-  const chamferBase = roundedRect(arena, mainW, mainL, p.pocketCornerR);
-  const chamfer = arena.track(
-    arena.track(
-      chamferBase.extrude(p.chamferHeight, 0, 0, [lipW / mainW, lipL / mainL])
-    ).translate([p.pocketOffsetX, p.pocketOffsetY, p.pocketFloor + lowerH])
-  );
+    // Chamfer -- a straight loft from the main footprint down to the lip
+    // footprint, built with extrude's own scaleTop so it's one solid taper
+    // instead of two profiles stitched by hand. Built centered (no XY
+    // offset) so the scale happens around the profile's own middle, then
+    // the whole result is translated into place afterward.
+    const chamferBase = roundedRect(arena, mainW, mainL, p.pocketCornerR);
+    const chamfer = arena.track(
+      arena.track(
+        chamferBase.extrude(p.chamferHeight, 0, 0, [lipW / mainW, lipL / mainL])
+      ).translate([sw.x, sw.y, p.pocketFloor + lowerH])
+    );
 
-  // Retention lip -- the narrow shelf that overhangs the cavity below it.
-  const lipProfile = roundedRect(arena, lipW, lipL, lipCornerR);
-  const lip = arena.track(
-    arena.track(lipProfile.extrude(p.retentionLipHeight + 1))
-      .translate([
-        p.pocketOffsetX,
-        p.pocketOffsetY,
-        p.pocketFloor + lowerH + p.chamferHeight,
-      ])
-  );
+    // Retention lip -- the narrow shelf that overhangs the cavity below it.
+    const lipProfile = roundedRect(arena, lipW, lipL, lipCornerR);
+    const lip = arena.track(
+      arena.track(lipProfile.extrude(p.retentionLipHeight + 1))
+        .translate([sw.x, sw.y, p.pocketFloor + lowerH + p.chamferHeight])
+    );
 
-  let pocket = arena.track(lowerCavity.add(chamfer));
-  pocket = arena.track(pocket.add(lip));
+    let onePocket = arena.track(lowerCavity.add(chamfer));
+    onePocket = arena.track(onePocket.add(lip));
+    pocket = pocket ? arena.track(pocket.add(onePocket)) : onePocket;
+  }
 
   const recessProfile = offsetOf(arena, outerProfile, -p.bottomWall);
   const recess = arena.track(
@@ -957,25 +1045,34 @@ function buildTop(arena, p) {
   // revolve() spins the profile around its own Y-axis and then sets THAT
   // as the resulting Manifold's Z-axis automatically -- no extra rotation
   // needed (an earlier version added one here, which just span the
-  // already-correct cylinder onto its side).
-  let post = arena.track(
-    arena.track(postProfile.revolve(SEGMENTS))
-      // Post follows the switch's X/Y position, not necessarily the
-      // outline's center -- the skirt/cap stay centered on the outline,
-      // only the post+socket shift to stay lined up over the switch.
-      .translate([p.pocketOffsetX, p.pocketOffsetY, -p.skirtDepth])
-  );
+  // already-correct cylinder onto its side). Built once here since its
+  // shape doesn't depend on position, then translated into place for
+  // each switch below and unioned together.
+  const postUnit = arena.track(postProfile.revolve(SEGMENTS));
+  const cross2DUnit = p.crossSocketDepth > 0 ? crossSocket2D(arena, p.crossWidth, p.crossArmWidth) : null;
 
-  // Blind cross-shaped socket cut into just the bottom tip of the post,
-  // so it plugs onto the switch's "+" stem like a keycap would -- the
-  // rest of the post stays solid.
-  if (p.crossSocketDepth > 0) {
-    const cross2D = crossSocket2D(arena, p.crossWidth, p.crossArmWidth);
-    const socketCut = arena.track(
-      arena.track(cross2D.extrude(p.crossSocketDepth + 0.5))
-        .translate([p.pocketOffsetX, p.pocketOffsetY, -p.skirtDepth - 0.25])
-    );
-    post = arena.track(post.subtract(socketCut));
+  let post = null;
+  let socketCuts = null;
+  for (const sw of p.switches) {
+    // Post follows each switch's X/Y position, not necessarily the
+    // outline's center -- the skirt/cap stay centered on the outline,
+    // only the posts+sockets shift to stay lined up over their switches.
+    const onePost = arena.track(postUnit.translate([sw.x, sw.y, -p.skirtDepth]));
+    post = post ? arena.track(post.add(onePost)) : onePost;
+
+    // Blind cross-shaped socket cut into just the bottom tip of the post,
+    // so it plugs onto the switch's "+" stem like a keycap would -- the
+    // rest of the post stays solid.
+    if (cross2DUnit) {
+      const oneCut = arena.track(
+        arena.track(cross2DUnit.extrude(p.crossSocketDepth + 0.5))
+          .translate([sw.x, sw.y, -p.skirtDepth - 0.25])
+      );
+      socketCuts = socketCuts ? arena.track(socketCuts.add(oneCut)) : oneCut;
+    }
+  }
+  if (socketCuts) {
+    post = arena.track(post.subtract(socketCuts));
   }
 
   let result = arena.track(cap.add(skirt));
@@ -1117,20 +1214,37 @@ const fill = new THREE.DirectionalLight(0xffffff, 0.35);
 fill.position.set(-100, 100, 60);
 scene.add(fill);
 
-const grid = new THREE.GridHelper(150, 15, 0x45456a, 0x28283f);
+const grid = new THREE.GridHelper(240, 24, 0x45456a, 0x28283f);
 grid.rotation.x = Math.PI / 2;
 scene.add(grid);
 
 // XYZ orientation indicator -- three colored arrows anchored at one grid
 // corner, purely a visual aid (not part of the model or export), same
 // red/green/blue = X/Y/Z convention as most CAD viewports.
-const AXIS_ORIGIN = new THREE.Vector3(-70, -70, 0);
+const AXIS_ORIGIN = new THREE.Vector3(-110, -110, 0);
 const AXIS_LENGTH = 25;
 const AXIS_HEAD_LENGTH = 6;
 const AXIS_HEAD_WIDTH = 3;
-scene.add(new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), AXIS_ORIGIN, AXIS_LENGTH, 0xff3b30, AXIS_HEAD_LENGTH, AXIS_HEAD_WIDTH));
-scene.add(new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), AXIS_ORIGIN, AXIS_LENGTH, 0x34c759, AXIS_HEAD_LENGTH, AXIS_HEAD_WIDTH));
-scene.add(new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), AXIS_ORIGIN, AXIS_LENGTH, 0x0a5fff, AXIS_HEAD_LENGTH, AXIS_HEAD_WIDTH));
+const AXIS_SHAFT_RADIUS = 1;
+
+// ArrowHelper's shaft is a thin WebGL line, whose width most GPU drivers
+// clamp to 1px regardless of linewidth -- so a "thicker line" has to be a
+// real 3D shaft (cylinder) + cone head instead.
+function addAxisArrow(dir, color) {
+  const shaftLength = AXIS_LENGTH - AXIS_HEAD_LENGTH;
+  const mat = new THREE.MeshBasicMaterial({ color });
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(AXIS_SHAFT_RADIUS, AXIS_SHAFT_RADIUS, shaftLength, 10), mat);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(AXIS_HEAD_WIDTH, AXIS_HEAD_LENGTH, 10), mat);
+  const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+  shaft.quaternion.copy(quat);
+  head.quaternion.copy(quat);
+  shaft.position.copy(AXIS_ORIGIN).addScaledVector(dir, shaftLength / 2);
+  head.position.copy(AXIS_ORIGIN).addScaledVector(dir, shaftLength + AXIS_HEAD_LENGTH / 2);
+  scene.add(shaft, head);
+}
+addAxisArrow(new THREE.Vector3(1, 0, 0), 0xff3b30);
+addAxisArrow(new THREE.Vector3(0, 1, 0), 0x34c759);
+addAxisArrow(new THREE.Vector3(0, 0, 1), 0x0a5fff);
 
 // flatShading is what actually matters here: CAD/boolean geometry has
 // lots of sharp edges, and smooth (Phong) shading blends normals across
@@ -1183,25 +1297,104 @@ function buildReferenceSwitchMesh() {
   return new THREE.Mesh(geo, mat);
 }
 
-const referenceSwitchMesh = buildReferenceSwitchMesh();
-referenceSwitchMesh.visible = false;
-scene.add(referenceSwitchMesh);
+// One reference-switch mesh per possible switch slot (built once up
+// front, same object reused for the whole session) -- only the first
+// params.switches.length of them are ever shown, each repositioned to
+// match its own switch's cavity.
+const MAX_SWITCHES = 4;
+const referenceSwitchMeshes = [];
+for (let i = 0; i < MAX_SWITCHES; i++) {
+  const mesh = buildReferenceSwitchMesh();
+  mesh.visible = false;
+  scene.add(mesh);
+  referenceSwitchMeshes.push(mesh);
+}
 let showReferenceSwitch = true; // UI toggle state, not part of params/history
 
 function updateReferenceSwitchVisibility() {
-  referenceSwitchMesh.visible = showReferenceSwitch && !assembledView;
+  const show = showReferenceSwitch && !assembledView;
+  for (let i = 0; i < referenceSwitchMeshes.length; i++) {
+    referenceSwitchMeshes[i].visible = show && i < params.switches.length;
+  }
 }
 
 function positionReferenceSwitch() {
   // Track the bottom piece's own position (which layoutParts() has
-  // already set by the time this runs) plus the pocket's offset within
-  // it, so the reference switch always sits exactly where the real
-  // switch cavity is -- not just floating at the world origin.
-  referenceSwitchMesh.position.set(
-    bottomMesh.position.x + params.pocketOffsetX,
-    bottomMesh.position.y + params.pocketOffsetY,
-    bottomMesh.position.z + params.pocketFloor
-  );
+  // already set by the time this runs) plus each switch's own offset
+  // within it, so every reference switch always sits exactly where its
+  // real cavity is -- not just floating at the world origin.
+  for (let i = 0; i < referenceSwitchMeshes.length; i++) {
+    const sw = params.switches[i];
+    if (!sw) continue;
+    referenceSwitchMeshes[i].position.set(
+      bottomMesh.position.x + sw.x,
+      bottomMesh.position.y + sw.y,
+      bottomMesh.position.z + params.pocketFloor
+    );
+  }
+}
+
+// Small floating "1"/"2"/.../ number billboards above each switch, so
+// it's obvious which physical switch you're moving while dragging its
+// position sliders -- especially useful once there are 2+ of them.
+// Canvas-texture sprites (not CSS labels) so no extra Three.js addon or
+// second renderer is needed; sprites always face the camera on their
+// own. depthTest is off and renderOrder is high so a label never gets
+// visually buried behind the part itself.
+function buildSwitchLabelSprite(number) {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'rgba(124, 111, 224, 0.92)';
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 64px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(number), size / 2, size / 2 + 4);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  const material = new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(8, 8, 1);
+  sprite.renderOrder = 999;
+  return sprite;
+}
+
+const switchLabelSprites = [];
+for (let i = 0; i < MAX_SWITCHES; i++) {
+  const sprite = buildSwitchLabelSprite(i + 1);
+  sprite.visible = false;
+  scene.add(sprite);
+  switchLabelSprites.push(sprite);
+}
+let showSwitchLabels = false; // UI toggle state, not part of params/history
+
+function updateSwitchLabelVisibility() {
+  for (let i = 0; i < switchLabelSprites.length; i++) {
+    switchLabelSprites[i].visible = showSwitchLabels && i < params.switches.length;
+  }
+}
+
+function positionSwitchLabels() {
+  // Tracks the bottom piece, same as positionReferenceSwitch() above --
+  // the switch cavity itself lives in the bottom piece, so the label
+  // needs to stay with it (not the top) as the two separate in Exploded
+  // view. Floats a few mm above the bottom piece's own rim so it clears
+  // the geometry regardless of view mode.
+  for (let i = 0; i < switchLabelSprites.length; i++) {
+    const sw = params.switches[i];
+    if (!sw) continue;
+    switchLabelSprites[i].position.set(
+      bottomMesh.position.x + sw.x,
+      bottomMesh.position.y + sw.y,
+      bottomMesh.position.z + params.bottomHeight + 6
+    );
+  }
 }
 
 let bottomMesh = null;
@@ -1305,6 +1498,7 @@ function rebuild() {
   layoutParts();
   statusEl.textContent = 'Ready';
   updateClearanceReadout(computeMinPocketClearance(params));
+  updateSwitchSpacingReadout(computeMinSwitchSpacing(params));
 }
 
 // Assembled/exploded is a pure view state -- not part of params/history
@@ -1344,6 +1538,8 @@ function layoutParts() {
   }
   positionReferenceSwitch();
   updateReferenceSwitchVisibility();
+  positionSwitchLabels();
+  updateSwitchLabelVisibility();
 }
 
 // ---------------------------------------------------------------------
@@ -1651,8 +1847,6 @@ const SLIDER_DEFS = {
     { key: 'textLineSpacing', label: 'Line spacing', min: 0.5, max: 2.5, step: 0.05, unit: '×' },
   ],
   'group-switch': [
-    { key: 'pocketOffsetX', label: 'Switch/Cavity position (left/right)', min: -20, max: 20, step: 0.1, unit: 'mm', bold: true },
-    { key: 'pocketOffsetY', label: 'Switch/Cavity position (fwd/back, +up/-toward base)', min: -20, max: 20, step: 0.1, unit: 'mm', bold: true },
     { key: 'switchW', label: 'Switch width', min: 10, max: 20, step: 0.1, unit: 'mm' },
     { key: 'switchL', label: 'Switch length', min: 10, max: 20, step: 0.1, unit: 'mm' },
     { key: 'pocketClearance', label: 'Cavity clearance', min: 0, max: 1, step: 0.05, unit: 'mm' },
@@ -1733,6 +1927,7 @@ function applySnapshot(snap) {
   textColorInputEl.value = params.textColor;
   textFontEl.value = params.textFont;
   buildSliders();
+  buildSwitchList();
   renderLogoStatus();
   rebuild();
 }
@@ -1760,120 +1955,290 @@ function updateUndoRedoButtons() {
   document.getElementById('redoBtn').disabled = redoStack.length === 0;
 }
 
+// Builds one slider row (name + click-to-edit value + range input),
+// used by both the generic SLIDER_DEFS-driven groups below and the
+// per-switch position rows in the switch list -- takes getter/setter
+// callbacks instead of assuming a plain params[key] so both callers can
+// share it (a switch position lives at params.switches[i].x, not a
+// top-level params key).
+function createSliderRow({ label, min, max, step, unit, bold, disabled, getValue, setValue }) {
+  const row = document.createElement('div');
+  row.className = 'slider-row';
+
+  const labelEl = document.createElement('label');
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'name';
+  nameSpan.textContent = label;
+  if (bold) nameSpan.style.fontWeight = '700';
+  const valSpan = document.createElement('span');
+  valSpan.className = 'val';
+  labelEl.appendChild(nameSpan);
+  labelEl.appendChild(valSpan);
+
+  const input = document.createElement('input');
+  input.type = 'range';
+  input.min = min;
+  input.max = max;
+  input.step = step;
+  input.value = getValue();
+  valSpan.textContent = `${getValue()} ${unit}`;
+
+  // Click the value to type an exact number instead of dragging --
+  // swaps the span for a number input in place, snapshotting/committing
+  // history the same way a slider drag does (one undo step per edit,
+  // not per keystroke).
+  valSpan.title = 'Click to type a value';
+  valSpan.addEventListener('click', () => {
+    if (input.disabled) return;
+    const editBox = document.createElement('input');
+    editBox.type = 'number';
+    editBox.className = 'val-edit';
+    editBox.min = min;
+    editBox.max = max;
+    editBox.step = step;
+    editBox.value = getValue();
+    valSpan.replaceWith(editBox);
+    editBox.focus();
+    editBox.select();
+
+    const editSnapshot = snapshotState();
+    let settled = false;
+    function commitEdit(apply) {
+      if (settled) return;
+      settled = true;
+      if (apply) {
+        let v = parseFloat(editBox.value);
+        if (Number.isFinite(v)) {
+          v = Math.min(max, Math.max(min, v));
+          setValue(v);
+          input.value = v;
+          valSpan.textContent = `${v} ${unit}`;
+          commitHistory(editSnapshot);
+          queueRebuild();
+        }
+      }
+      editBox.replaceWith(valSpan);
+    }
+    editBox.addEventListener('blur', () => commitEdit(true));
+    editBox.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        editBox.blur();
+      } else if (ev.key === 'Escape') {
+        ev.preventDefault();
+        commitEdit(false);
+      }
+    });
+  });
+
+  if (disabled) {
+    input.disabled = true;
+    row.classList.add('is-disabled');
+  }
+
+  // One undo step per finished change, not per drag tick: capture the
+  // state right before the FIRST 'input' event of a drag/keypress,
+  // then commit it once the browser fires 'change' (mouseup, or
+  // immediately after each arrow-key press).
+  let dragStartSnapshot = null;
+  input.addEventListener('input', () => {
+    if (dragStartSnapshot === null) dragStartSnapshot = snapshotState();
+    const v = parseFloat(input.value);
+    setValue(v);
+    valSpan.textContent = `${v} ${unit}`;
+    queueRebuild();
+  });
+  input.addEventListener('change', () => {
+    if (dragStartSnapshot) {
+      commitHistory(dragStartSnapshot);
+      dragStartSnapshot = null;
+    }
+  });
+
+  row.appendChild(labelEl);
+  row.appendChild(input);
+  return row;
+}
+
 function buildSliders() {
   for (const [groupId, defs] of Object.entries(SLIDER_DEFS)) {
     const container = document.getElementById(groupId);
     container.innerHTML = '';
     for (const def of defs) {
-      const row = document.createElement('div');
-      row.className = 'slider-row';
-
-      const label = document.createElement('label');
-      const nameSpan = document.createElement('span');
-      nameSpan.className = 'name';
-      nameSpan.textContent = def.label;
-      if (def.bold) nameSpan.style.fontWeight = '700';
-      const valSpan = document.createElement('span');
-      valSpan.className = 'val';
-      label.appendChild(nameSpan);
-      label.appendChild(valSpan);
-
-      const input = document.createElement('input');
-      input.type = 'range';
-      input.min = def.min;
-      input.max = def.max;
-      input.step = def.step;
-      input.value = params[def.key];
-      valSpan.textContent = `${params[def.key]} ${def.unit}`;
-
-      // Click the value to type an exact number instead of dragging --
-      // swaps the span for a number input in place, snapshotting/committing
-      // history the same way a slider drag does (one undo step per edit,
-      // not per keystroke).
-      valSpan.title = 'Click to type a value';
-      valSpan.addEventListener('click', () => {
-        if (input.disabled) return;
-        const editBox = document.createElement('input');
-        editBox.type = 'number';
-        editBox.className = 'val-edit';
-        editBox.min = def.min;
-        editBox.max = def.max;
-        editBox.step = def.step;
-        editBox.value = params[def.key];
-        valSpan.replaceWith(editBox);
-        editBox.focus();
-        editBox.select();
-
-        const editSnapshot = snapshotState();
-        let settled = false;
-        function commitEdit(apply) {
-          if (settled) return;
-          settled = true;
-          if (apply) {
-            let v = parseFloat(editBox.value);
-            if (Number.isFinite(v)) {
-              v = Math.min(def.max, Math.max(def.min, v));
-              params[def.key] = v;
-              input.value = v;
-              valSpan.textContent = `${v} ${def.unit}`;
-              commitHistory(editSnapshot);
-              queueRebuild();
-            }
-          }
-          editBox.replaceWith(valSpan);
-        }
-        editBox.addEventListener('blur', () => commitEdit(true));
-        editBox.addEventListener('keydown', (ev) => {
-          if (ev.key === 'Enter') {
-            ev.preventDefault();
-            editBox.blur();
-          } else if (ev.key === 'Escape') {
-            ev.preventDefault();
-            commitEdit(false);
-          }
-        });
+      const disabled =
+        (def.key === 'outlineCornerRadius' && params.outlineShape !== 'square' && params.outlineShape !== 'triangle') ||
+        (def.key === 'logoMargin' && params.outlineShape !== 'imported');
+      const row = createSliderRow({
+        label: def.label,
+        min: def.min,
+        max: def.max,
+        step: def.step,
+        unit: def.unit,
+        bold: def.bold,
+        disabled,
+        getValue: () => params[def.key],
+        setValue: (v) => { params[def.key] = v; },
       });
-
-      // Corner radius only applies to square/triangle outlines -- grey it
-      // out (and block interaction) for circle and imported-logo shapes,
-      // rather than leaving a slider on screen that silently does nothing.
-      if (def.key === 'outlineCornerRadius' && params.outlineShape !== 'square' && params.outlineShape !== 'triangle') {
-        input.disabled = true;
-        row.classList.add('is-disabled');
-      }
-
-      // Buffer around logo only applies once a logo is actually imported
-      // -- grey it out for the basic (circle/square/triangle) shapes.
-      if (def.key === 'logoMargin' && params.outlineShape !== 'imported') {
-        input.disabled = true;
-        row.classList.add('is-disabled');
-      }
-
-      // One undo step per finished change, not per drag tick: capture the
-      // state right before the FIRST 'input' event of a drag/keypress,
-      // then commit it once the browser fires 'change' (mouseup, or
-      // immediately after each arrow-key press).
-      let dragStartSnapshot = null;
-      input.addEventListener('input', () => {
-        if (dragStartSnapshot === null) dragStartSnapshot = snapshotState();
-        const v = parseFloat(input.value);
-        params[def.key] = v;
-        valSpan.textContent = `${v} ${def.unit}`;
-        queueRebuild();
-      });
-      input.addEventListener('change', () => {
-        if (dragStartSnapshot) {
-          commitHistory(dragStartSnapshot);
-          dragStartSnapshot = null;
-        }
-      });
-
-      row.appendChild(label);
-      row.appendChild(input);
       container.appendChild(row);
     }
   }
 }
+
+// Switch list -- one entry per params.switches[i], each with its own
+// click-to-edit X/Y position (reusing createSliderRow above) and a
+// remove button, plus an Add switch button capped at MAX_SWITCHES.
+function buildSwitchList() {
+  const container = document.getElementById('switch-list');
+  container.innerHTML = '';
+  params.switches.forEach((sw, i) => {
+    const entry = document.createElement('div');
+    entry.className = 'switch-entry';
+
+    const header = document.createElement('div');
+    header.className = 'switch-entry-header';
+    const title = document.createElement('span');
+    title.className = 'switch-entry-title';
+    title.textContent = `Switch ${i + 1}`;
+    header.appendChild(title);
+
+    if (params.switches.length > 1) {
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'switch-remove-btn';
+      removeBtn.title = 'Remove this switch';
+      removeBtn.setAttribute('aria-label', `Remove switch ${i + 1}`);
+      removeBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+      removeBtn.addEventListener('click', () => {
+        const before = snapshotState();
+        params.switches.splice(i, 1);
+        commitHistory(before);
+        buildSwitchList();
+        rebuild();
+      });
+      header.appendChild(removeBtn);
+    }
+    entry.appendChild(header);
+
+    entry.appendChild(createSliderRow({
+      label: 'Position (left/right)',
+      min: -45, max: 45, step: 0.1, unit: 'mm',
+      getValue: () => params.switches[i].x,
+      setValue: (v) => { params.switches[i].x = v; },
+    }));
+    entry.appendChild(createSliderRow({
+      label: 'Position (fwd/back, +up/-toward base)',
+      min: -45, max: 45, step: 0.1, unit: 'mm',
+      getValue: () => params.switches[i].y,
+      setValue: (v) => { params.switches[i].y = v; },
+    }));
+
+    container.appendChild(entry);
+  });
+
+  const addBtn = document.getElementById('addSwitchBtn');
+  addBtn.disabled = params.switches.length >= MAX_SWITCHES;
+  const autoSpaceBtn = document.getElementById('autoSpaceSwitchesBtn');
+  autoSpaceBtn.disabled = params.switches.length <= 1;
+}
+
+// Arranges every current switch evenly around the center, pushed as far
+// out as the available space allows -- reuses the exact same clearance
+// checks the wall-spacing and switch-spacing readouts already do, just
+// run against a series of candidate layouts instead of the live one.
+// Binary-searches the ring radius: bigger rings spread switches further
+// apart from each other but eat into the wall clearance, so the sweet
+// spot is the largest radius that still keeps both checks out of the
+// red "too thin" zone.
+function autoSpaceSwitches() {
+  const n = params.switches.length;
+  if (n <= 1) return;
+
+  const angleStep = (2 * Math.PI) / n;
+  function layoutAt(d) {
+    const result = [];
+    for (let i = 0; i < n; i++) {
+      const a = i * angleStep;
+      result.push({
+        x: Math.round(d * Math.cos(a) * 10) / 10,
+        y: Math.round(d * Math.sin(a) * 10) / 10,
+      });
+    }
+    return result;
+  }
+  // Target the "Safe" (green) tier both readouts use, not just clear
+  // of the red "Too Thin" cutoff -- landing in the yellow "Close" zone
+  // isn't what "auto space" should produce.
+  function wallSafeAt(d) {
+    return computeMinPocketClearance({ ...params, switches: layoutAt(d) }) >= 2.5;
+  }
+  function spacingSafeAt(d) {
+    return computeMinSwitchSpacing({ ...params, switches: layoutAt(d) }) >= 2.5;
+  }
+
+  const hiBound = Math.max(params.outlineDiameter, 40);
+
+  // Smallest radius where switches clear each other -- spacing grows
+  // monotonically with d, and d=0 is NEVER safe for 2+ switches (they'd
+  // be exactly stacked), so this always searches up from an unsafe start
+  // rather than assuming 0 is a valid starting point.
+  let dMin;
+  if (spacingSafeAt(hiBound)) {
+    let lo = 0, hi = hiBound;
+    for (let i = 0; i < 20; i++) {
+      const mid = (lo + hi) / 2;
+      if (spacingSafeAt(mid)) hi = mid; else lo = mid;
+    }
+    dMin = hi;
+  } else {
+    dMin = hiBound; // never becomes safe even out at the generous bound
+  }
+
+  // Largest radius that still leaves a safe wall to the outline edge --
+  // clearance shrinks monotonically with d.
+  let dMax;
+  if (wallSafeAt(0)) {
+    if (wallSafeAt(hiBound)) {
+      dMax = hiBound;
+    } else {
+      let lo = 0, hi = hiBound;
+      for (let i = 0; i < 20; i++) {
+        const mid = (lo + hi) / 2;
+        if (wallSafeAt(mid)) lo = mid; else hi = mid;
+      }
+      dMax = lo;
+    }
+  } else {
+    dMax = 0; // not even centered switches leave a safe wall
+  }
+
+  // Use as much space as is safely available: push out to dMax (as far
+  // from the edge as stays safe). Since spacing only improves further
+  // out, dMax >= dMin means both checks hold there. If the outline's too
+  // small for both at once, fall back to dMin so switches at least clear
+  // each other, even if the wall ends up flagged thin.
+  const d = dMax >= dMin ? dMax : dMin;
+
+  const before = snapshotState();
+  params.switches = layoutAt(d);
+  commitHistory(before);
+  buildSwitchList();
+  rebuild();
+}
+
+document.getElementById('autoSpaceSwitchesBtn').addEventListener('click', autoSpaceSwitches);
+
+document.getElementById('addSwitchBtn').addEventListener('click', () => {
+  if (params.switches.length >= MAX_SWITCHES) return;
+  const before = snapshotState();
+  // Offset the new switch from the last one so it doesn't start stacked
+  // directly on top of an existing switch.
+  const last = params.switches[params.switches.length - 1];
+  const gap = params.switchW + 2 * params.pocketClearance + 4;
+  params.switches.push({ x: last.x + gap, y: last.y });
+  commitHistory(before);
+  buildSwitchList();
+  rebuild();
+});
 
 document.getElementById('assembledBtn').addEventListener('click', () => setAssembledView(true));
 document.getElementById('explodedBtn').addEventListener('click', () => setAssembledView(false));
@@ -2096,6 +2461,15 @@ function setShowReferenceSwitch(show) {
 document.getElementById('referenceSwitchOnBtn').addEventListener('click', () => setShowReferenceSwitch(true));
 document.getElementById('referenceSwitchOffBtn').addEventListener('click', () => setShowReferenceSwitch(false));
 
+function setShowSwitchLabels(show) {
+  showSwitchLabels = show;
+  document.getElementById('switchLabelsOnBtn').classList.toggle('active', show);
+  document.getElementById('switchLabelsOffBtn').classList.toggle('active', !show);
+  updateSwitchLabelVisibility();
+}
+document.getElementById('switchLabelsOnBtn').addEventListener('click', () => setShowSwitchLabels(true));
+document.getElementById('switchLabelsOffBtn').addEventListener('click', () => setShowSwitchLabels(false));
+
 document.getElementById('resetBtn').addEventListener('click', () => {
   const before = snapshotState();
   params = { ...DEFAULTS };
@@ -2104,6 +2478,7 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   textColorInputEl.value = params.textColor;
   textFontEl.value = params.textFont;
   buildSliders();
+  buildSwitchList();
   commitHistory(before);
   rebuild();
 });
@@ -2139,6 +2514,7 @@ loadProjectInput.addEventListener('change', async (ev) => {
     textColorInputEl.value = params.textColor;
     textFontEl.value = params.textFont;
     buildSliders();
+    buildSwitchList();
     renderLogoStatus();
     commitHistory(before);
     rebuild();
@@ -2161,6 +2537,7 @@ async function main() {
   textColorInputEl.value = params.textColor;
   textFontEl.value = params.textFont;
   buildSliders();
+  buildSwitchList();
   updateUndoRedoButtons();
   try {
     await initManifold();

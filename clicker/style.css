@@ -325,6 +325,50 @@ details summary {
   cursor: not-allowed;
 }
 
+.switch-entry {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px 2px;
+  margin-bottom: 8px;
+}
+
+.switch-entry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.switch-entry-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.switch-remove-btn {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.switch-remove-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.switch-remove-btn:hover {
+  color: var(--text);
+  background: var(--border);
+  filter: none;
+}
+
 .select-label,
 .section-label {
   display: block;

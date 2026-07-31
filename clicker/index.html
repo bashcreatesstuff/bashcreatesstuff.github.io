@@ -126,6 +126,14 @@
         </div>
       </div>
 
+      <div class="row">
+        <span class="select-label">Text &amp; logo style</span>
+        <div class="pill-toggle" id="engraveStyleToggle">
+          <button type="button" id="engraveInlayBtn" class="active">Inlay (flush)</button>
+          <button type="button" id="engraveEmbossBtn">Emboss (raised)</button>
+        </div>
+      </div>
+
       <details>
         <summary>Text</summary>
         <div class="row">
@@ -151,12 +159,13 @@
         </div>
         <div id="group-text"></div>
         <p class="hint">
-          Text is inlaid flush into the top surface, the same way an
-          imported logo's colors are, so it won't need supports when
-          printed logo-side-down. Works alongside any shape, including an
-          imported logo. The font choices here favor thick, even strokes
-          -- serif and script fonts tend to fill in or break off at small
-          sizes, so they're left out.
+          Uses the Text &amp; logo style toggle above -- Inlay keeps the
+          whole face flush for a clean face-down print with no supports,
+          Emboss raises the letters proud of the surface for a face-up
+          print instead. Works alongside any shape, including an imported
+          logo. The font choices here favor thick, even strokes -- serif
+          and script fonts tend to fill in or break off at small sizes, so
+          they're left out.
         </p>
       </details>
 

@@ -36,8 +36,14 @@ const DEFAULTS = {
   // "Logo import" section below. logoColorCount only affects PNG import
   // (SVG colors come straight from the file's own fill colors).
   logoColorCount: 2,       // how many distinct print-color regions to detect
-  logoEmbossHeight: 0.6,   // how tall the raised logo-color layers stand
-                           // proud of the top cap's face
+  logoEmbossHeight: 0.6,   // Inlay mode: recess depth cut into the top cap's
+                           // face. Emboss mode: how tall the raised layers
+                           // stand proud of it instead. See engraveStyle.
+  engraveStyle: 'inlay',   // 'inlay' = flush recess, whole face stays one flat
+                           // plane, prints cleanly face-down with no supports.
+                           // 'emboss' = raised relief on top of the face,
+                           // prints face-up, also support-free since the
+                           // raised bits sit directly on solid material.
   logoMargin: 2,           // buffer ring of plain cap material between the
                            // traced logo's outer edge and the cap's own
                            // outer edge, so the logo doesn't run right up
@@ -52,6 +58,9 @@ const DEFAULTS = {
   textOffsetY: 0,          // mm
   textRotation: 0,         // degrees
   textLineSpacing: 1,      // multiplier on default line spacing (1 = normal)
+  textEmbossHeight: 0.6,   // Inlay mode: recess depth cut into the top cap's
+                           // face. Emboss mode: how tall the raised text
+                           // stands proud of it instead. See engraveStyle.
   textColor: '#f0f0f7',    // display/export color for the text inlay layer
   textFont: 'Arial, Helvetica, sans-serif', // canvas font-family stack for the text inlay
 
@@ -1092,12 +1101,20 @@ function buildTop(arena, p) {
   // right up to the logo's edge would otherwise overhang past the cap's
   // actual printed boundary.
   const logoLayers = [];
+  // Inlay = flush recess (whole face stays one flat plane, prints cleanly
+  // face-down with no supports). Emboss = raised relief sitting on top of
+  // the face instead (prints face-up, also support-free since the raised
+  // bits sit directly on solid material underneath). See DEFAULTS.engraveStyle.
+  const isEmboss = p.engraveStyle === 'emboss';
   if (p.outlineShape === 'imported' && importedLogo && p.logoEmbossHeight > 0) {
     const R = p.outlineDiameter / 2;
-    // Leave at least a 0.2mm solid floor under the recess so the cap
-    // doesn't get cut clean through if inlay depth is pushed close to (or
-    // past) the cap's own thickness.
-    const depth = Math.min(p.logoEmbossHeight, Math.max(0, p.capThickness - 0.2));
+    // Inlay: leave at least a 0.2mm solid floor under the recess so the cap
+    // doesn't get cut clean through if depth is pushed close to (or past)
+    // the cap's own thickness. Emboss just adds material on top of the cap,
+    // so it isn't bounded by the cap's own thickness at all.
+    const depth = isEmboss
+      ? p.logoEmbossHeight
+      : Math.min(p.logoEmbossHeight, Math.max(0, p.capThickness - 0.2));
     const clippedLayers = [];
     for (const layer of importedLogo.colorLayers) {
       const raw2D = importedLogoLayer2D(arena, layer, R);
@@ -1106,23 +1123,28 @@ function buildTop(arena, p) {
       clippedLayers.push({ hex: layer.hex, cs: clipped2D });
     }
     if (clippedLayers.length > 0 && depth > 0.001) {
-      // Union of every color's footprint = the one recess to carve out of
-      // the base cap so nothing double-occupies the same volume as the
-      // inlay plugs below.
-      let union2D = clippedLayers[0].cs;
-      for (let i = 1; i < clippedLayers.length; i++) {
-        union2D = arena.track(CrossSection.union(union2D, clippedLayers[i].cs));
+      if (!isEmboss) {
+        // Union of every color's footprint = the one recess to carve out of
+        // the base cap so nothing double-occupies the same volume as the
+        // inlay plugs below.
+        let union2D = clippedLayers[0].cs;
+        for (let i = 1; i < clippedLayers.length; i++) {
+          union2D = arena.track(CrossSection.union(union2D, clippedLayers[i].cs));
+        }
+        const recessCut = arena.track(
+          arena.track(union2D.extrude(depth + 0.2))
+            .translate([0, 0, p.capThickness - depth])
+        );
+        result = arena.track(result.subtract(recessCut));
       }
-      const recessCut = arena.track(
-        arena.track(union2D.extrude(depth + 0.2))
-          .translate([0, 0, p.capThickness - depth])
-      );
-      result = arena.track(result.subtract(recessCut));
 
+      // Inlay plugs sit flush IN the recess (top face at capThickness).
+      // Emboss bosses sit ON TOP of the surface (base at capThickness).
+      const zBase = isEmboss ? p.capThickness : p.capThickness - depth;
       for (const { hex, cs } of clippedLayers) {
         const solid = arena.track(
           arena.track(cs.extrude(depth))
-            .translate([0, 0, p.capThickness - depth])
+            .translate([0, 0, zBase])
         );
         logoLayers.push({ hex, solid });
       }
@@ -1130,11 +1152,10 @@ function buildTop(arena, p) {
   }
 
   // Custom text -- independent of outline shape/logo, an optional extra
-  // flush inlay (same recessed approach as the logo color layers above,
-  // for the same print-face-down/no-supports reason) so a name, date, or
-  // short message can be added to ANY shape, imported logo or not.
-  // Clipped to the cap's own footprint so it can never overhang the
-  // actual printed edge regardless of where it's positioned.
+  // inlay or emboss (same approach as the logo color layers above) so a
+  // name, date, or short message can be added to ANY shape, imported logo
+  // or not. Clipped to the cap's own footprint so it can never overhang
+  // the actual printed edge regardless of where it's positioned.
   if (p.textContent && p.textContent.trim() && p.textSize > 0) {
     const textLoops = textToMmLoops(p.textContent, p.textSize, p.textLineSpacing, p.textFont);
     if (textLoops && textLoops.length > 0) {
@@ -1143,16 +1164,19 @@ function buildTop(arena, p) {
       text2D = arena.track(text2D.translate([p.textOffsetX, p.textOffsetY]));
       const clippedText2D = arena.track(text2D.intersect(capProfile));
       if (!clippedText2D.isEmpty()) {
-        const textDepth = Math.min(0.6, Math.max(0, p.capThickness - 0.2));
+        const textDepth = isEmboss ? p.textEmbossHeight : Math.min(p.textEmbossHeight, Math.max(0, p.capThickness - 0.2));
         if (textDepth > 0.001) {
-          const textRecessCut = arena.track(
-            arena.track(clippedText2D.extrude(textDepth + 0.2))
-              .translate([0, 0, p.capThickness - textDepth])
-          );
-          result = arena.track(result.subtract(textRecessCut));
+          if (!isEmboss) {
+            const textRecessCut = arena.track(
+              arena.track(clippedText2D.extrude(textDepth + 0.2))
+                .translate([0, 0, p.capThickness - textDepth])
+            );
+            result = arena.track(result.subtract(textRecessCut));
+          }
+          const zBase = isEmboss ? p.capThickness : p.capThickness - textDepth;
           const textSolid = arena.track(
             arena.track(clippedText2D.extrude(textDepth))
-              .translate([0, 0, p.capThickness - textDepth])
+              .translate([0, 0, zBase])
           );
           logoLayers.push({ hex: p.textColor, solid: textSolid });
         }
@@ -1849,6 +1873,7 @@ const SLIDER_DEFS = {
     { key: 'textOffsetY', label: 'Text position (fwd/back)', min: -40, max: 40, step: 0.5, unit: 'mm' },
     { key: 'textRotation', label: 'Text rotation', min: -180, max: 180, step: 1, unit: '°' },
     { key: 'textLineSpacing', label: 'Line spacing', min: 0.5, max: 2.5, step: 0.05, unit: '×' },
+    { key: 'textEmbossHeight', label: 'Emboss/recess height', min: 0.2, max: 2.5, step: 0.1, unit: 'mm' },
   ],
   'group-switch': [
     { key: 'switchW', label: 'Switch width', min: 10, max: 20, step: 0.1, unit: 'mm' },
@@ -1876,6 +1901,7 @@ const SLIDER_DEFS = {
   ],
   'group-logo': [
     { key: 'logoMargin', label: 'Buffer around logo', min: 0, max: 8, step: 0.5, unit: 'mm' },
+    { key: 'logoEmbossHeight', label: 'Emboss/recess height', min: 0.2, max: 2.5, step: 0.1, unit: 'mm' },
   ],
 };
 
@@ -2242,6 +2268,21 @@ document.getElementById('addSwitchBtn').addEventListener('click', () => {
 
 document.getElementById('assembledBtn').addEventListener('click', () => setAssembledView(true));
 document.getElementById('explodedBtn').addEventListener('click', () => setAssembledView(false));
+
+// Inlay/Emboss is a real geometry choice (see buildTop()), not just a
+// viewport cosmetic, so it goes through params/history/rebuild like any
+// other slider or dropdown instead of the assembled/reference-switch
+// toggles above (which are UI-only view state).
+function setEngraveStyle(style) {
+  const before = snapshotState();
+  params.engraveStyle = style;
+  document.getElementById('engraveInlayBtn').classList.toggle('active', style === 'inlay');
+  document.getElementById('engraveEmbossBtn').classList.toggle('active', style === 'emboss');
+  commitHistory(before);
+  queueRebuild();
+}
+document.getElementById('engraveInlayBtn').addEventListener('click', () => setEngraveStyle('inlay'));
+document.getElementById('engraveEmbossBtn').addEventListener('click', () => setEngraveStyle('emboss'));
 
 // Viewport display colors -- purely cosmetic (not part of params/history
 // or the exported 3mf, which always uses the printer's loaded filament),

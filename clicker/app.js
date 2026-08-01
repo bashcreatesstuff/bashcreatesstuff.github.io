@@ -89,13 +89,37 @@ const DEFAULTS = {
                            // typical 1-1.2mm print-fillet default)
   pocketDepth: 7.8,        // total socket depth: lower cavity + chamfer + lip
   pocketFloor: 1.6,        // solid floor under the switch
-  // One or more switch positions (up to MAX_SWITCHES), each { x, y } in mm
-  // relative to the outline's center -- useful for asymmetric shapes (a
-  // triangle, or an imported logo) where the middle isn't where the most
-  // material is. The outer shell/skirt always stays centered on the
-  // outline; only the switch cavities/posts move. Multiple entries here
-  // is what makes a multi-button part possible.
+  // One or more switch positions (up to MAX_INTERNAL_SWITCHES), each
+  // { x, y } in mm relative to a single button's OWN center -- useful for
+  // asymmetric shapes (a triangle, or an imported logo) where the middle
+  // isn't where the most material is, or for fitting more than one switch
+  // inside one button. See buttonCount below for connecting multiple
+  // separate buttons together, which is a different thing -- this array
+  // gets repeated once per connected button, not replaced by it.
   switches: [{ x: 0, y: 0 }],
+
+  // How many of this same button, connected in a line, print as one base
+  // (1 = a normal single button, unchanged from before this existed). See
+  // getButtonCenters()/buildBottom() -- each button's own outline is
+  // placed close enough to its neighbor that they physically fuse
+  // together (still recognizable as separate rounded shapes, not blended
+  // into one smooth capsule), while each button keeps its own separate
+  // recess pocket so any normally-designed single top still docks into
+  // any one of them. Tops are always designed/exported one at a time --
+  // this only affects the base.
+  buttonCount: 1,
+
+  // Optional loop for a keyring, fused to the far (+Y) end of the button
+  // row -- the last button placed by getButtonCenters(), or the only
+  // button if buttonCount is 1. See buildKeychainLoop(). Off by default
+  // since it's a deliberate add-on, not something every design wants.
+  keychainLoop: false,
+  keychainLoopOuterD: 16,     // mm, overall loop diameter
+  keychainLoopHoleD: 6,       // mm, the hole a keyring actually threads through
+  keychainLoopThickness: 4,   // mm -- doesn't need to match bottomHeight, just
+                               // needs to be thick enough to hold up on a keyring
+  keychainLoopOffsetX: 0,     // mm, slides the loop left/right along the far
+                               // edge it's fused to (see buildKeychainLoop())
 
   // The reference pocket isn't one constant width -- see buildBottom()
   // below. These three describe the narrower "retention lip" step near
@@ -389,8 +413,17 @@ function rgbToHex([r, g, b]) {
 // point up (image Y grows down), scaled so the bounding box's half-
 // diagonal is 1 -- the same "fits the circumscribed circle" convention
 // square/triangle already use, so outlineDiameter means the same thing
-// for an imported logo as it does for the built-in shapes.
-function normalizeLoopSets(loopSets, bboxOverride) {
+// for an imported logo as it does for the built-in shapes. flipY defaults
+// to true for real PNG/SVG traces, which really are in image space (Y
+// grows down) -- but the built-in SAMPLE_LOGOS point loops (star, heart,
+// etc.) below are hand-authored directly in ordinary math convention (Y
+// already grows up), so flipping them AGAIN here would turn them upside
+// down. That bug was invisible for the cross/hexagon samples (both are
+// mirror-symmetric top-to-bottom, so flipping them does nothing visible)
+// but very visible for the star and heart, which aren't. loadSampleLogo()
+// passes flipY: false to skip the flip for all four, so a future
+// asymmetric sample doesn't quietly hit the same bug.
+function normalizeLoopSets(loopSets, bboxOverride, flipY = true) {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   if (bboxOverride) {
     [minX, minY, maxX, maxY] = bboxOverride;
@@ -406,9 +439,10 @@ function normalizeLoopSets(loopSets, bboxOverride) {
   }
   const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
   const halfDiag = Math.hypot((maxX - minX) / 2, (maxY - minY) / 2) || 1;
+  const ySign = flipY ? -1 : 1;
   return loopSets.map((loops) =>
     loops.map((loop) =>
-      loop.map(([x, y]) => [(x - cx) / halfDiag, -(y - cy) / halfDiag])
+      loop.map(([x, y]) => [(x - cx) / halfDiag, ySign * (y - cy) / halfDiag])
     )
   );
 }
@@ -491,6 +525,7 @@ async function importLogoFromPNG(file, colorCount) {
     outlineLoops: normOutline,
     colorLayers: colorLayersPixel.map((layer, i) => ({ hex: layer.hex, loops: normColorLoops[i] })),
     sourceName: file.name,
+    isSample: false, // a real upload -- see isConnectedButtonsRestricted()
   };
 }
 
@@ -596,6 +631,7 @@ async function importLogoFromSVG(file) {
     outlineLoops: normOutline,
     colorLayers: colorLayersRaw.map((layer, i) => ({ hex: layer.hex, loops: normColorLoops[i] })),
     sourceName: file.name,
+    isSample: false, // a real upload -- see isConnectedButtonsRestricted()
   };
 }
 
@@ -772,6 +808,41 @@ function offsetOf(arena, cs, delta) {
   return arena.track(cs.offset(delta, 'Round', 2, SEGMENTS));
 }
 
+// A slight 45-degree-ish chamfer on the OUTER top edge of an arbitrary
+// (possibly concave, possibly non-convex) 2D profile, built shape-agnostic
+// so it works for circles, squares, triangles, crosses, stars, hearts, and
+// imported logo outlines alike.
+//
+// Manifold's extrude() only has a scaleTop parameter, which is a uniform
+// XY scale factor -- that happens to equal a true constant-mm inward
+// offset for a circle or an axis-aligned rectangle (see the switch
+// pocket's chamfer above), but NOT for anything else, since scaling
+// distorts corners and edges by different amounts. There's also no native
+// "loft between two independently-shaped profiles" primitive to reach for
+// instead. So this builds the taper the general way: a short stack of
+// thin prism layers, each using the real offsetOf() inset for that
+// layer's height, unioned together. Each layer uses the inset value from
+// its OWN BOTTOM edge, so the first layer starts at inset=0 and lines up
+// seamlessly with the un-chamfered body below it; the small (~depth/N)
+// undershoot this leaves at the very top is invisible at "slight" chamfer
+// sizes.
+//
+// Returns a solid spanning z=[0, height], footprint = profile at z=0
+// tapering to profile offset inward by `depth` at z=height.
+function buildOuterChamferStack(arena, profile, depth, height, layers = 6) {
+  const layerH = height / layers;
+  let stack = null;
+  for (let i = 0; i < layers; i++) {
+    const insetAtBottom = (depth * i) / layers;
+    const layerProfile = insetAtBottom > 0.01 ? offsetOf(arena, profile, -insetAtBottom) : profile;
+    const layerSolid = arena.track(
+      arena.track(layerProfile.extrude(layerH + 0.02)).translate([0, 0, i * layerH])
+    );
+    stack = stack ? arena.track(stack.add(layerSolid)) : layerSolid;
+  }
+  return stack;
+}
+
 function roundedRect(arena, w, l, r) {
   const rr = Math.max(0, Math.min(r, w / 2 - 0.01, l / 2 - 0.01));
   const base = arena.track(CrossSection.square([w - 2 * rr, l - 2 * rr], true));
@@ -787,10 +858,314 @@ function crossSocket2D(arena, width, armWidth) {
   return arena.track(CrossSection.union(horiz, vert));
 }
 
+// ---------------------------------------------------------------------
+// Connected buttons -- see DEFAULTS.buttonCount. A single button (the
+// default, buttonCount === 1) is always just one entry at the origin, so
+// every one-button part is completely unaffected by any of this.
+// ---------------------------------------------------------------------
+
+// Real center-to-center spacing between connected buttons, MEASURED via
+// actual CSG rather than assumed from a formula. Buttons are strung along
+// the scene's Y axis (the green viewport arrow) -- see getButtonCenters()
+// below. The original design rule is "this button's own recess (inset by
+// bottomWall from its own outline) should land exactly at the neighbor's
+// outer edge" -- so this binary-searches for the smallest pitch at which
+// this button's recess and a Y-translated copy of the outline just stop
+// overlapping, same binary-search-by-CSG-boolean technique already used
+// by computeMinPocketClearance()/computeMinSwitchSpacing() below. That's
+// the general, shape-agnostic version of the same rule a simpler bounding-
+// box measurement only gets right for shapes whose boundary is "full"
+// (present all the way across) at both of its extreme Y points, in a
+// matching way top and bottom -- true for circle/square/triangle/hexagon/
+// cross, but NOT for a shape like the star or heart sample, where e.g. the
+// star's top is a single spike tip on the center line but its bottom is a
+// shallow notch ON the center line flanked by two spike tips OFF it -- a
+// bounding-box measurement gets fooled by that mismatch and leaves either
+// a gap or an overlap. This version measures the real polygons, so it's
+// correct regardless of whether the shape is convex or top/bottom
+// symmetric. (It only guarantees the recess and the neighbor's OUTLINE
+// don't overlap -- since the neighbor's own recess is always strictly
+// inside its outline, that also guarantees the two recesses/cavities
+// don't overlap each other, which is the actual interference this needs
+// to prevent.) Cached (keyed on a full snapshot of params) since
+// getButtonCenters() below is called many times per rebuild -- only
+// actually re-measures when something that could affect the shape has
+// changed. IMPORTANT: outline2D()'s 'imported' case reads the module-level
+// `importedLogo` variable, not anything in `p` -- switching between sample
+// logos (or uploading a new one) never changes params.outlineShape (it's
+// 'imported' before and after), so a cache key built from `p` alone can't
+// tell the shape changed at all, and would keep returning the PREVIOUS
+// logo's pitch until some unrelated param (like buttonCount itself) also
+// happened to change. Folding in importedLogo's own outline data closes
+// that gap.
+let _pitchCacheKey = null;
+let _pitchCacheValue = null;
+function measureButtonPitch(p, arena) {
+  const key = JSON.stringify(p) + '|' + JSON.stringify(importedLogo && importedLogo.outlineLoops);
+  if (key === _pitchCacheKey && _pitchCacheValue != null) return _pitchCacheValue;
+  const localArena = arena || makeArena();
+  const outline = outline2D(localArena, p);
+  const recess = offsetOf(localArena, outline, -p.bottomWall);
+
+  function overlapsAtPitch(d) {
+    const shiftedOutline = localArena.track(outline.translate([0, d]));
+    const overlap = localArena.track(recess.intersect(shiftedOutline));
+    return !overlap.isEmpty();
+  }
+
+  let lo = 0;
+  let hi = p.outlineDiameter * 2; // comfortably larger than any real shape
+  if (!overlapsAtPitch(hi)) {
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      if (overlapsAtPitch(mid)) lo = mid; else hi = mid;
+    }
+  } // else: pathological shape still overlapping even at hi -- fall back to hi below
+  const pitch = Math.max(1, hi);
+
+  if (!arena) localArena.disposeAll();
+  _pitchCacheKey = key;
+  _pitchCacheValue = pitch;
+  return pitch;
+}
+
+// Center positions for each connected button along a line -- strung
+// along the Y axis (green viewport arrow) rather than X, matching how
+// the rest of the viewport reads front-to-back. Pitch (see
+// measureButtonPitch() above) is chosen so that each button's own recess
+// pocket lands exactly at its neighbor's outer edge -- see
+// buildBottomRecessProfile() below -- leaving one wall's worth of solid
+// material at the narrowest point of the connection, same as the wall
+// thickness everywhere else on the part. `arena` is optional -- pass it
+// when one is already open (avoids a redundant temp arena on a cache
+// miss); safe to omit from pure UI/positioning call sites.
+function getButtonCenters(p, arena) {
+  const n = Math.max(1, p.buttonCount || 1);
+  if (n === 1) return [{ x: 0, y: 0 }];
+  const pitch = measureButtonPitch(p, arena);
+  const start = -((n - 1) * pitch) / 2;
+  const centers = [];
+  for (let i = 0; i < n; i++) centers.push({ x: 0, y: start + i * pitch });
+  return centers;
+}
+
+// Connected buttons are only allowed for a shape whose connection behavior
+// has actually been checked: circle/square/triangle (simple, provably
+// symmetric primitives) and the 4 built-in sample logos (a small, fixed
+// set -- see measureButtonPitch() above for exactly what "checked" means
+// here). A REAL uploaded SVG/PNG logo's silhouette is unpredictable --
+// there's no way to verify ahead of time that its connection point won't
+// land on a thin feature or cut into a neighboring button's cavity, the
+// same class of problem measureButtonPitch()'s binary search fixed for
+// the star/heart samples, but which can't be fixed in general for an
+// arbitrary shape nobody's looked at. `importedLogo` with no `isSample`
+// flag (or missing entirely, e.g. outlineShape freshly switched to
+// 'imported' before any logo/sample has been loaded, which falls back to
+// a plain circle in outline2D()) is treated as unverified and restricted.
+function isConnectedButtonsRestricted(p) {
+  return p.outlineShape === 'imported' && !(importedLogo && importedLogo.isSample);
+}
+
+// Clamps buttonCount back to 1 whenever the current outline just became a
+// restricted shape (see isConnectedButtonsRestricted() above) -- so a
+// buttonCount > 1 left over from an earlier circle/square/sample selection
+// doesn't silently carry over into unverified geometry the moment someone
+// switches to a real uploaded logo. Call this anywhere params.outlineShape
+// or importedLogo could have just changed, before rebuild().
+function enforceButtonCountRestriction() {
+  if (isConnectedButtonsRestricted(params) && params.buttonCount > 1) {
+    params.buttonCount = 1;
+  }
+}
+
+// Internal Switches is a per-button template that gets repeated at every
+// connected button's position (see getExpandedSwitches() below) -- more
+// than one internal switch, multiplied across several connected buttons,
+// gets cluttered fast (duplicate reference-switch meshes and number
+// labels piling up) and isn't really what a multi-switch layout is for
+// once buttonCount > 1. Capped to a single internal switch whenever more
+// than one button is connected.
+function isInternalSwitchesRestricted(p) {
+  return (p.buttonCount || 1) > 1;
+}
+
+// Clamps params.switches back down to its first entry whenever
+// buttonCount just became > 1 (see isInternalSwitchesRestricted() above)
+// -- so a multi-switch layout left over from a single-button design
+// doesn't silently get repeated across every connected button. Call this
+// anywhere params.buttonCount could have just changed, before rebuild().
+function enforceSingleSwitchWhenConnected() {
+  if (isInternalSwitchesRestricted(params) && params.switches.length > 1) {
+    params.switches = [params.switches[0]];
+  }
+}
+
+// p.switches is defined relative to a single button's own center -- this
+// expands it into absolute positions across every connected button (e.g.
+// 2 buttons x 2 internal switches = 4 absolute positions). Used for
+// everything that needs the REAL switch layout of the whole base: pocket
+// cutting, clearance checks, and the reference-switch/label viewport
+// display. buildTop() deliberately keeps using p.switches directly,
+// unexpanded, since a top is always just one button's worth of posts.
+function getExpandedSwitches(p, arena) {
+  const centers = getButtonCenters(p, arena);
+  if (centers.length === 1) return p.switches;
+  const expanded = [];
+  for (const c of centers) {
+    for (const sw of p.switches) {
+      expanded.push({ x: c.x + sw.x, y: c.y + sw.y });
+    }
+  }
+  return expanded;
+}
+
+// The bottom piece's outer shell -- one outline for a single button, or
+// the union of N overlapping copies (one per connected button) for
+// multiple buttons. This is what actually produces the "recognizable but
+// connected" shape: each copy is the SAME outline used everywhere else
+// (whatever shape/corner-radius is selected), just placed close enough
+// to its neighbor to fuse.
+function buildBottomOuterProfile(arena, p) {
+  const centers = getButtonCenters(p, arena);
+  const unit = outline2D(arena, p);
+  if (centers.length === 1) return unit;
+  let union = null;
+  for (const c of centers) {
+    const one = (c.x === 0 && c.y === 0) ? unit : arena.track(unit.translate([c.x, c.y]));
+    union = union ? arena.track(CrossSection.union(union, one)) : one;
+  }
+  return union;
+}
+
+// The recess that receives each button's own top -- ALWAYS one separate
+// pocket per button, never one continuous ring around the fused outer
+// shell, so a normally-designed single top still docks correctly into
+// any one button regardless of how many are connected together.
+function buildBottomRecessProfile(arena, p) {
+  const centers = getButtonCenters(p, arena);
+  const unitRecess = offsetOf(arena, outline2D(arena, p), -p.bottomWall);
+  if (centers.length === 1) return unitRecess;
+  let union = null;
+  for (const c of centers) {
+    const one = (c.x === 0 && c.y === 0) ? unitRecess : arena.track(unitRecess.translate([c.x, c.y]));
+    union = union ? arena.track(CrossSection.union(union, one)) : one;
+  }
+  return union;
+}
+
+// Builds the keychain loop (see DEFAULTS.keychainLoop) as a standalone 3D
+// solid, already positioned in world space against the far (+Y) end of
+// the button row -- the LAST entry from getButtonCenters() (or the only
+// entry if buttonCount is 1). Returns null if it's turned off, or if the
+// outer/hole diameters don't leave room for a valid ring (shouldn't
+// normally happen given the slider ranges, but the hole diameter is
+// clamped defensively either way).
+function buildKeychainLoop(arena, p) {
+  if (!p.keychainLoop) return null;
+
+  const outerR = p.keychainLoopOuterD / 2;
+  const MIN_WALL = 1.5; // minimum ring wall thickness, mm -- keeps a valid
+                        // ring even if the hole slider is dragged close to
+                        // the outer diameter slider
+  const holeR = Math.min(p.keychainLoopHoleD / 2, outerR - MIN_WALL);
+  if (holeR <= 0.3) return null; // degenerate -- no room for a real hole
+
+  const centers = getButtonCenters(p, arena);
+  const lastCenter = centers[centers.length - 1]; // furthest +Y button
+  const outline = outline2D(arena, p);
+  const offsetX = p.keychainLoopOffsetX || 0;
+  const outerCircleUnit = arena.track(CrossSection.circle(outerR, SEGMENTS));
+
+  // Same binary-search-by-CSG-intersection technique as
+  // measureButtonPitch() above, generalized to a DIFFERENT shape pair
+  // (this button's outline vs. a plain circle instead of vs. a copy of
+  // itself) -- finds the real LOCAL Y offset (from the button's own
+  // center) where the loop's outer circle just touches this button's
+  // actual outline, correct for any shape, not just ones symmetric
+  // enough for a bounding-box guess to work. Tested at the ACTUAL
+  // offsetX (not just the center line) so the touch point stays correct
+  // even when the loop is slid sideways -- matters for an asymmetric
+  // shape like a square, where the touch point near a corner sits closer
+  // than the touch point near the middle of a flat edge.
+  function overlapsAtY(d) {
+    const loopCircle = arena.track(outerCircleUnit.translate([offsetX, d]));
+    const overlap = arena.track(outline.intersect(loopCircle));
+    return !overlap.isEmpty();
+  }
+
+  // If the loop doesn't even reach the button at this X offset (slid too
+  // far sideways), there's nothing valid to fuse it to -- skip it rather
+  // than place a disconnected floating ring.
+  if (!overlapsAtY(0)) return null;
+
+  let lo = 0;
+  let hi = p.outlineDiameter + outerR * 2; // comfortably larger than any real shape
+  if (!overlapsAtY(hi)) {
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      if (overlapsAtY(mid)) lo = mid; else hi = mid;
+    }
+  }
+  const touchY = hi; // smallest LOCAL offset where the circle and outline are just separate
+
+  // Deliberately fuse DEEPER than a bare touch, for durability -- there's
+  // no cavity to avoid here (unlike button-to-button connections), so more
+  // overlap is simply a stronger joint. Capped by the ring's own wall
+  // thickness (with a 0.5mm safety margin) so the overlap can never eat
+  // into the hole itself and block it, no matter how thin a ring the
+  // slider values produce.
+  const ringWall = outerR - holeR;
+  const overlap = Math.max(1, Math.min(ringWall - 0.5, 4));
+  const attachY = lastCenter.y + touchY - overlap;
+  const attachX = lastCenter.x + offsetX;
+
+  // Built as a REVOLVE of the ring's (radius, height) cross-section rather
+  // than an extruded annulus -- same "round the corner in the 2D profile,
+  // then revolve" technique already used for the switch post's fillet
+  // (see postFilletRadius above). Rounding the TWO TOP corners (outer rim
+  // and inner hole) of that cross-section -- sharp on the bottom, since
+  // that side is the one fused flush against the button -- produces a
+  // properly rounded top edge all the way around the ring. Fillet size is
+  // fixed (not user-adjustable), scaled down for a thin ring wall or a
+  // thin loop so the two corner arcs can never grow large enough to
+  // overlap each other into a degenerate profile.
+  const T = p.keychainLoopThickness;
+  const TOP_FILLET_R = Math.max(0, Math.min(1, ringWall * 0.45, T * 0.45));
+  const FILLET_SEGS = 12;
+  const profilePts = [[holeR, 0], [outerR, 0]];
+  if (TOP_FILLET_R > 0.05) {
+    // Round the TOP-OUTER corner: arc center inset (outerR-fr, T-fr),
+    // sweeping from pointing straight out (t=0) to pointing straight up
+    // (t=PI/2).
+    const cxO = outerR - TOP_FILLET_R, czO = T - TOP_FILLET_R;
+    for (let i = 0; i <= FILLET_SEGS; i++) {
+      const t = (Math.PI / 2) * (i / FILLET_SEGS);
+      profilePts.push([cxO + TOP_FILLET_R * Math.cos(t), czO + TOP_FILLET_R * Math.sin(t)]);
+    }
+    // Round the TOP-INNER corner: arc center inset (holeR+fr, T-fr),
+    // sweeping from pointing straight up (t=PI/2) to pointing straight in
+    // (t=PI).
+    const cxI = holeR + TOP_FILLET_R, czI = T - TOP_FILLET_R;
+    for (let i = 0; i <= FILLET_SEGS; i++) {
+      const t = (Math.PI / 2) + (Math.PI / 2) * (i / FILLET_SEGS);
+      profilePts.push([cxI + TOP_FILLET_R * Math.cos(t), czI + TOP_FILLET_R * Math.sin(t)]);
+    }
+  } else {
+    profilePts.push([outerR, T]);
+    profilePts.push([holeR, T]);
+  }
+
+  const ringProfile = arena.track(new CrossSection([profilePts]));
+  const ringSolid = arena.track(ringProfile.revolve(SEGMENTS));
+  return arena.track(ringSolid.translate([attachX, attachY, 0]));
+}
+
 // Union of every switch's pocket outline (just one, most of the time) --
 // used by the wall-clearance and switch-spacing checks below, which only
 // need the 2D footprint, not the full 3D pocket geometry buildBottom()
-// builds.
+// builds. Uses the EXPANDED switch list so these checks account for every
+// actual cavity across every connected button, not just one button's
+// worth of internal switches.
 function allSwitchPockets2D(arena, p) {
   const base = roundedRect(
     arena,
@@ -799,7 +1174,7 @@ function allSwitchPockets2D(arena, p) {
     p.pocketCornerR
   );
   let union = null;
-  for (const sw of p.switches) {
+  for (const sw of getExpandedSwitches(p, arena)) {
     const one = (sw.x === 0 && sw.y === 0) ? base : arena.track(base.translate([sw.x, sw.y]));
     union = union ? arena.track(CrossSection.union(union, one)) : one;
   }
@@ -822,7 +1197,7 @@ function allSwitchPockets2D(arena, p) {
 function computeMinPocketClearance(p) {
   const arena = makeArena();
   const pocket = allSwitchPockets2D(arena, p);
-  const recessProfile = offsetOf(arena, outline2D(arena, p), -p.bottomWall);
+  const recessProfile = buildBottomRecessProfile(arena, p);
 
   function fitsAtOffset(d) {
     const expanded = arena.track(pocket.offset(d, 'Round', 2, SEGMENTS));
@@ -871,7 +1246,8 @@ function updateClearanceReadout(clearanceMm) {
 // you exactly how much physical gap separates them. Only meaningful
 // with 2+ switches; returns Infinity otherwise so the readout can hide.
 function computeMinSwitchSpacing(p) {
-  if (p.switches.length < 2) return Infinity;
+  const switches = getExpandedSwitches(p);
+  if (switches.length < 2) return Infinity;
   const arena = makeArena();
   const base = roundedRect(
     arena,
@@ -885,10 +1261,10 @@ function computeMinSwitchSpacing(p) {
   }
 
   let minGap = Infinity;
-  for (let i = 0; i < p.switches.length; i++) {
-    for (let j = i + 1; j < p.switches.length; j++) {
-      const a = pocketAt(p.switches[i]);
-      const b = pocketAt(p.switches[j]);
+  for (let i = 0; i < switches.length; i++) {
+    for (let j = i + 1; j < switches.length; j++) {
+      const a = pocketAt(switches[i]);
+      const b = pocketAt(switches[j]);
 
       function touchingAtOffset(d) {
         const ea = arena.track(a.offset(d, 'Round', 2, SEGMENTS));
@@ -950,8 +1326,26 @@ function updateSwitchSpacingReadout(minGapMm) {
 // Cherry MX plate-mount hole spec) that overhangs the cavity and is what
 // actually holds the switch in.
 function buildBottom(arena, p) {
-  const outerProfile = outline2D(arena, p);
-  const outer = arena.track(outerProfile.extrude(p.bottomHeight));
+  // buildBottomOuterProfile() is just outline2D() itself for a single
+  // button (buttonCount === 1) -- everything below is unchanged from
+  // before connected buttons existed in that case.
+  const outerProfile = buildBottomOuterProfile(arena, p);
+  // Slight 45-degree chamfer on the top outer edge only -- the bottom edge
+  // stays sharp/flat since it sits on the print bed. Depth is clamped well
+  // below bottomWall so the taper can never eat into the recess pocket's
+  // own wall, and below bottomHeight so it can't invert a very thin base.
+  const OUTER_CHAMFER = Math.max(0, Math.min(0.6, p.bottomWall * 0.4, p.bottomHeight * 0.4));
+  let outer;
+  if (OUTER_CHAMFER > 0.05) {
+    const mainH = p.bottomHeight - OUTER_CHAMFER;
+    const mainBody = arena.track(outerProfile.extrude(mainH));
+    const chamferStack = arena.track(
+      buildOuterChamferStack(arena, outerProfile, OUTER_CHAMFER, OUTER_CHAMFER).translate([0, 0, mainH])
+    );
+    outer = arena.track(mainBody.add(chamferStack));
+  } else {
+    outer = arena.track(outerProfile.extrude(p.bottomHeight));
+  }
 
   const mainW = p.switchW + 2 * p.pocketClearance;
   const mainL = p.switchL + 2 * p.pocketClearance;
@@ -961,11 +1355,11 @@ function buildBottom(arena, p) {
   const lowerH = Math.max(0.1, p.pocketDepth - p.chamferHeight - p.retentionLipHeight);
 
   // One switch pocket (lower cavity + chamfer + retention lip) per entry
-  // in p.switches, unioned together before being cut from the shell --
-  // same per-switch construction as a single switch always used, just
-  // repeated at each position.
+  // in the EXPANDED switch list, unioned together before being cut from
+  // the shell -- same per-switch construction as a single switch always
+  // used, just repeated at every position across every connected button.
   let pocket = null;
-  for (const sw of p.switches) {
+  for (const sw of getExpandedSwitches(p, arena)) {
     // Lower cavity -- the switch body's own footprint, sitting on the floor.
     const lowerProfile = roundedRect(arena, mainW, mainL, p.pocketCornerR);
     const lowerCavity = arena.track(
@@ -997,7 +1391,12 @@ function buildBottom(arena, p) {
     pocket = pocket ? arena.track(pocket.add(onePocket)) : onePocket;
   }
 
-  const recessProfile = offsetOf(arena, outerProfile, -p.bottomWall);
+  // Deliberately NOT offsetOf(outerProfile, -bottomWall) anymore -- that
+  // would produce one continuous recess channel spanning every connected
+  // button. Each button needs its OWN separate recess pocket (see
+  // buildBottomRecessProfile()) so a normally-designed single top still
+  // docks into any one of them, regardless of how many are connected.
+  const recessProfile = buildBottomRecessProfile(arena, p);
   const recess = arena.track(
     arena.track(recessProfile.extrude(p.recessDepth + 1))
       .translate([0, 0, p.bottomHeight - p.recessDepth])
@@ -1005,6 +1404,14 @@ function buildBottom(arena, p) {
 
   let result = arena.track(outer.subtract(pocket));
   result = arena.track(result.subtract(recess));
+
+  // Keychain loop -- added AFTER the pocket/recess cuts (it's solid, no
+  // cavity of its own to worry about) and unioned onto the finished 3D
+  // solid rather than folded into buildBottomOuterProfile()'s 2D union,
+  // since it needs its own extrude height (keychainLoopThickness),
+  // independent of bottomHeight.
+  const keychainLoop = buildKeychainLoop(arena, p);
+  if (keychainLoop) result = arena.track(result.add(keychainLoop));
 
   return result;
 }
@@ -1020,7 +1427,21 @@ function buildTop(arena, p) {
   // this is what makes the default circular output match the measured
   // 49.5mm top OD against the bottom's 55.5mm OD.
   const capProfile = offsetOf(arena, outline2D(arena, p), skirtOuterDelta);
-  const cap = arena.track(capProfile.extrude(p.capThickness));
+  // Same slight 45-degree chamfer, applied to the cap's top outer edge
+  // (the pressable face) only -- the bottom edge stays sharp since that's
+  // where the skirt attaches, an internal mating surface.
+  const CAP_OUTER_CHAMFER = Math.max(0, Math.min(0.6, p.capThickness * 0.4));
+  let cap;
+  if (CAP_OUTER_CHAMFER > 0.05) {
+    const capMainH = p.capThickness - CAP_OUTER_CHAMFER;
+    const capMainBody = arena.track(capProfile.extrude(capMainH));
+    const capChamferStack = arena.track(
+      buildOuterChamferStack(arena, capProfile, CAP_OUTER_CHAMFER, CAP_OUTER_CHAMFER).translate([0, 0, capMainH])
+    );
+    cap = arena.track(capMainBody.add(capChamferStack));
+  } else {
+    cap = arena.track(capProfile.extrude(p.capThickness));
+  }
 
   const skirtOuter = offsetOf(arena, outline2D(arena, p), skirtOuterDelta);
   const skirtInner = offsetOf(arena, outline2D(arena, p), skirtInnerDelta);
@@ -1486,13 +1907,16 @@ function buildReferenceSwitchMesh() {
   return new THREE.Mesh(geo, mat);
 }
 
-// One reference-switch mesh per possible switch slot (built once up
-// front, same object reused for the whole session) -- only the first
-// params.switches.length of them are ever shown, each repositioned to
-// match its own switch's cavity.
-const MAX_SWITCHES = 4;
+// One reference-switch mesh per possible switch slot, across every
+// possible connected button (built once up front, same objects reused
+// for the whole session) -- only as many as the EXPANDED switch list
+// (see getExpandedSwitches()) are ever shown, each repositioned to match
+// its own switch's real cavity.
+const MAX_INTERNAL_SWITCHES = 4; // per button -- unchanged from before buttonCount existed
+const MAX_BUTTONS = 5;
+const MAX_TOTAL_SWITCHES = MAX_INTERNAL_SWITCHES * MAX_BUTTONS;
 const referenceSwitchMeshes = [];
-for (let i = 0; i < MAX_SWITCHES; i++) {
+for (let i = 0; i < MAX_TOTAL_SWITCHES; i++) {
   const mesh = buildReferenceSwitchMesh();
   mesh.visible = false;
   scene.add(mesh);
@@ -1502,8 +1926,9 @@ let showReferenceSwitch = true; // UI toggle state, not part of params/history
 
 function updateReferenceSwitchVisibility() {
   const show = showReferenceSwitch && !assembledView;
+  const switches = getExpandedSwitches(params);
   for (let i = 0; i < referenceSwitchMeshes.length; i++) {
-    referenceSwitchMeshes[i].visible = show && i < params.switches.length;
+    referenceSwitchMeshes[i].visible = show && i < switches.length;
   }
 }
 
@@ -1512,8 +1937,9 @@ function positionReferenceSwitch() {
   // already set by the time this runs) plus each switch's own offset
   // within it, so every reference switch always sits exactly where its
   // real cavity is -- not just floating at the world origin.
+  const switches = getExpandedSwitches(params);
   for (let i = 0; i < referenceSwitchMeshes.length; i++) {
-    const sw = params.switches[i];
+    const sw = switches[i];
     if (!sw) continue;
     referenceSwitchMeshes[i].position.set(
       bottomMesh.position.x + sw.x,
@@ -1555,7 +1981,7 @@ function buildSwitchLabelSprite(number) {
 }
 
 const switchLabelSprites = [];
-for (let i = 0; i < MAX_SWITCHES; i++) {
+for (let i = 0; i < MAX_TOTAL_SWITCHES; i++) {
   const sprite = buildSwitchLabelSprite(i + 1);
   sprite.visible = false;
   scene.add(sprite);
@@ -1568,8 +1994,9 @@ function updateSwitchLabelVisibility() {
   // the reference switches should hide the labels too, even if the label
   // toggle itself is still set to Show.
   const show = showSwitchLabels && showReferenceSwitch;
+  const switches = getExpandedSwitches(params);
   for (let i = 0; i < switchLabelSprites.length; i++) {
-    switchLabelSprites[i].visible = show && i < params.switches.length;
+    switchLabelSprites[i].visible = show && i < switches.length;
   }
 }
 
@@ -1579,8 +2006,9 @@ function positionSwitchLabels() {
   // needs to stay with it (not the top) as the two separate in Exploded
   // view. Floats a few mm above the bottom piece's own rim so it clears
   // the geometry regardless of view mode.
+  const switches = getExpandedSwitches(params);
   for (let i = 0; i < switchLabelSprites.length; i++) {
-    const sw = params.switches[i];
+    const sw = switches[i];
     if (!sw) continue;
     switchLabelSprites[i].position.set(
       bottomMesh.position.x + sw.x,
@@ -1692,6 +2120,7 @@ function rebuild() {
   statusEl.textContent = 'Ready';
   updateClearanceReadout(computeMinPocketClearance(params));
   updateSwitchSpacingReadout(computeMinSwitchSpacing(params));
+  autosave();
 }
 
 // Assembled/exploded is a pure view state -- not part of params/history
@@ -1716,7 +2145,13 @@ function layoutParts() {
     // datasheet specs (which undershot the actual part).
     const capTopZ = params.bottomHeight + params.restProtrusion;
     const topZ = capTopZ - params.capThickness;
-    topMesh.position.set(0, 0, topZ);
+    // Only one top is ever previewed/designed at a time (see buttonCount),
+    // so dock it onto the FIRST button's own cavity rather than always
+    // (0,0) -- with an even buttonCount there's no button centered at the
+    // origin (it sits in the gap between two of them), which would
+    // otherwise leave the preview floating visibly off-center.
+    const dockCenter = getButtonCenters(params)[0];
+    topMesh.position.set(dockCenter.x, dockCenter.y, topZ);
     for (const m of logoLayerMeshes) m.position.copy(topMesh.position);
   } else {
     // The top cap's radius is always <= the bottom's outer radius (it's
@@ -2032,27 +2467,114 @@ function build3MF(parts) {
   ]);
 }
 
-document.getElementById('export3mfBtn').addEventListener('click', () => {
-  // One file, both pieces, each print-ready: the bottom sits as-designed
-  // and the top is rotated logo/pressable-face-down (see
-  // topExportTransform), with both offset sideways from the shared origin
-  // so they land side by side on the build plate instead of overlapping.
-  // Independent of whatever the live preview happens to be showing
-  // (assembled vs. exploded).
+// part: 'whole' | 'bottom' | 'top'. Builds the same {name, mesh, hex, matrix}
+// list build3MF()/buildSTL() both consume. 'whole' keeps the original
+// side-by-side layout (bottom sitting as-designed, top rotated
+// logo/pressable-face-down, both offset sideways so they don't overlap on
+// the build plate); 'bottom'/'top' export just that one piece, centered at
+// the origin in its own print orientation, since there's nothing else on
+// the plate to offset around. Independent of whatever the live preview
+// happens to be showing (assembled vs. exploded).
+function getExportParts(part) {
   const gap = params.outlineDiameter * 1.2;
-  const parts = [
-    { name: 'bottom', mesh: bottomMesh, hex: '#9147FF', matrix: bottomExportTransform(-gap / 2, 0) },
-    { name: 'cap-base', mesh: topMesh, hex: '#1185FE', matrix: topExportTransform(params, gap / 2, 0) },
-  ];
-  logoLayerMeshes.forEach((mesh, i) => {
-    parts.push({
-      name: `logo-${i + 1}`,
-      mesh,
-      hex: mesh.userData.logoHex,
-      matrix: topExportTransform(params, gap / 2, 0),
+  const parts = [];
+  if (part === 'whole' || part === 'bottom') {
+    const offsetX = (part === 'whole') ? -gap / 2 : 0;
+    parts.push({ name: 'bottom', mesh: bottomMesh, hex: '#9147FF', matrix: bottomExportTransform(offsetX, 0) });
+  }
+  if (part === 'whole' || part === 'top') {
+    const offsetX = (part === 'whole') ? gap / 2 : 0;
+    parts.push({ name: 'cap-base', mesh: topMesh, hex: '#1185FE', matrix: topExportTransform(params, offsetX, 0) });
+    logoLayerMeshes.forEach((mesh, i) => {
+      parts.push({
+        name: `logo-${i + 1}`,
+        mesh,
+        hex: mesh.userData.logoHex,
+        matrix: topExportTransform(params, offsetX, 0),
+      });
     });
-  });
-  downloadBlob(build3MF(parts), 'clicker.3mf');
+  }
+  return parts;
+}
+
+// Binary STL -- unlike .3mf, STL has no concept of separate parts or
+// per-part color, so every part passed in gets fused into ONE unified
+// solid (fine for the bottom, which is already a single color; for the
+// top, this silently merges any logo color layers into the base part --
+// use 3MF instead of STL if per-part logo color needs to survive into the
+// sliced file). Standard 80-byte header + uint32 triangle count, then 50
+// bytes per triangle (12-byte facet normal + 3x 12-byte vertex + 2-byte
+// attribute count left at 0), all little-endian float32 -- the common
+// binary STL layout every slicer reads.
+function buildSTL(parts) {
+  const allTriangles = [];
+  for (const p of parts) {
+    const { vertices, triangles } = meshTriangles(p.mesh, p.matrix);
+    for (const [a, b, c] of triangles) {
+      allTriangles.push([vertices[a], vertices[b], vertices[c]]);
+    }
+  }
+
+  const triCount = allTriangles.length;
+  const buffer = new ArrayBuffer(84 + triCount * 50);
+  const view = new DataView(buffer);
+  view.setUint32(80, triCount, true);
+
+  const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3();
+  const edge1 = new THREE.Vector3(), edge2 = new THREE.Vector3(), normal = new THREE.Vector3();
+  let offset = 84;
+  for (const [v0, v1, v2] of allTriangles) {
+    vA.set(v0[0], v0[1], v0[2]);
+    vB.set(v1[0], v1[1], v1[2]);
+    vC.set(v2[0], v2[1], v2[2]);
+    edge1.subVectors(vB, vA);
+    edge2.subVectors(vC, vA);
+    normal.crossVectors(edge1, edge2).normalize();
+
+    view.setFloat32(offset, normal.x, true); offset += 4;
+    view.setFloat32(offset, normal.y, true); offset += 4;
+    view.setFloat32(offset, normal.z, true); offset += 4;
+    for (const v of [v0, v1, v2]) {
+      view.setFloat32(offset, v[0], true); offset += 4;
+      view.setFloat32(offset, v[1], true); offset += 4;
+      view.setFloat32(offset, v[2], true); offset += 4;
+    }
+    offset += 2; // attribute byte count -- unused, left zeroed
+  }
+  return new Blob([buffer], { type: 'model/stl' });
+}
+
+// Export part/format -- pure UI state, not part of params/history, same
+// as assembledView above.
+let exportPart = 'whole'; // 'whole' | 'bottom' | 'top'
+let exportFormat = '3mf'; // '3mf' | 'stl'
+
+function setExportPart(part) {
+  exportPart = part;
+  document.getElementById('exportPartWholeBtn').classList.toggle('active', part === 'whole');
+  document.getElementById('exportPartBottomBtn').classList.toggle('active', part === 'bottom');
+  document.getElementById('exportPartTopBtn').classList.toggle('active', part === 'top');
+}
+document.getElementById('exportPartWholeBtn').addEventListener('click', () => setExportPart('whole'));
+document.getElementById('exportPartBottomBtn').addEventListener('click', () => setExportPart('bottom'));
+document.getElementById('exportPartTopBtn').addEventListener('click', () => setExportPart('top'));
+
+function setExportFormat(format) {
+  exportFormat = format;
+  document.getElementById('exportFormat3mfBtn').classList.toggle('active', format === '3mf');
+  document.getElementById('exportFormatStlBtn').classList.toggle('active', format === 'stl');
+}
+document.getElementById('exportFormat3mfBtn').addEventListener('click', () => setExportFormat('3mf'));
+document.getElementById('exportFormatStlBtn').addEventListener('click', () => setExportFormat('stl'));
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const parts = getExportParts(exportPart);
+  const filename = `clicker-${exportPart}.${exportFormat}`;
+  if (exportFormat === '3mf') {
+    downloadBlob(build3MF(parts), filename);
+  } else {
+    downloadBlob(buildSTL(parts), filename);
+  }
 });
 
 // ---------------------------------------------------------------------
@@ -2078,6 +2600,15 @@ const SLIDER_DEFS = {
     { key: 'pocketCornerR', label: 'Cavity corner radius', min: 0, max: 3, step: 0.1, unit: 'mm' },
     { key: 'retentionLipInset', label: 'Retention lip inset (per side)', min: 0, max: 2, step: 0.02, unit: 'mm' },
     { key: 'retentionLipHeight', label: 'Retention lip height', min: 0, max: 4, step: 0.1, unit: 'mm' },
+  ],
+  'group-buttons': [
+    { key: 'buttonCount', label: 'Number of connected buttons', min: 1, max: 5, step: 1, unit: '' },
+  ],
+  'group-keychain': [
+    { key: 'keychainLoopOuterD', label: 'Loop outer diameter', min: 8, max: 30, step: 0.5, unit: 'mm' },
+    { key: 'keychainLoopHoleD', label: 'Loop hole diameter', min: 3, max: 15, step: 0.5, unit: 'mm' },
+    { key: 'keychainLoopThickness', label: 'Loop thickness', min: 2, max: 12, step: 0.2, unit: 'mm' },
+    { key: 'keychainLoopOffsetX', label: 'Loop position (left/right)', min: -30, max: 30, step: 0.5, unit: 'mm' },
   ],
   'group-bottom': [
     { key: 'bottomWall', label: 'Outer wall thickness', min: 1, max: 6, step: 0.1, unit: 'mm' },
@@ -2152,6 +2683,7 @@ function applySnapshot(snap) {
   textContentEl.value = params.textContent;
   textColorInputEl.value = params.textColor;
   textFontEl.value = params.textFont;
+  syncKeychainLoopUI();
   buildSliders();
   buildSwitchList();
   renderLogoStatus();
@@ -2293,7 +2825,8 @@ function buildSliders() {
     for (const def of defs) {
       const disabled =
         (def.key === 'outlineCornerRadius' && params.outlineShape !== 'square' && params.outlineShape !== 'triangle') ||
-        (def.key === 'logoMargin' && params.outlineShape !== 'imported');
+        (def.key === 'logoMargin' && params.outlineShape !== 'imported') ||
+        (def.key === 'buttonCount' && isConnectedButtonsRestricted(params));
       const row = createSliderRow({
         label: def.label,
         min: def.min,
@@ -2303,16 +2836,30 @@ function buildSliders() {
         bold: def.bold,
         disabled,
         getValue: () => params[def.key],
-        setValue: (v) => { params[def.key] = v; },
+        setValue: (v) => {
+          params[def.key] = v;
+          if (def.key === 'buttonCount') {
+            // A buttonCount change can invalidate the internal-switches
+            // restriction (see isInternalSwitchesRestricted() above) --
+            // clamp and refresh that list's own UI (Add switch
+            // enabled/disabled, restriction note) right away rather than
+            // waiting for some unrelated switch-list interaction to
+            // notice.
+            enforceSingleSwitchWhenConnected();
+            buildSwitchList();
+          }
+        },
       });
       container.appendChild(row);
     }
   }
+  document.getElementById('connectedButtonsRestrictionNote').style.display =
+    isConnectedButtonsRestricted(params) ? 'block' : 'none';
 }
 
 // Switch list -- one entry per params.switches[i], each with its own
 // click-to-edit X/Y position (reusing createSliderRow above) and a
-// remove button, plus an Add switch button capped at MAX_SWITCHES.
+// remove button, plus an Add switch button capped at MAX_INTERNAL_SWITCHES.
 function buildSwitchList() {
   const container = document.getElementById('switch-list');
   container.innerHTML = '';
@@ -2362,9 +2909,11 @@ function buildSwitchList() {
   });
 
   const addBtn = document.getElementById('addSwitchBtn');
-  addBtn.disabled = params.switches.length >= MAX_SWITCHES;
+  addBtn.disabled = params.switches.length >= MAX_INTERNAL_SWITCHES || isInternalSwitchesRestricted(params);
   const autoSpaceBtn = document.getElementById('autoSpaceSwitchesBtn');
   autoSpaceBtn.disabled = params.switches.length <= 1;
+  document.getElementById('internalSwitchesRestrictionNote').style.display =
+    isInternalSwitchesRestricted(params) ? 'block' : 'none';
 }
 
 // Arranges every current switch evenly around the center, pushed as far
@@ -2454,7 +3003,7 @@ function autoSpaceSwitches() {
 document.getElementById('autoSpaceSwitchesBtn').addEventListener('click', autoSpaceSwitches);
 
 document.getElementById('addSwitchBtn').addEventListener('click', () => {
-  if (params.switches.length >= MAX_SWITCHES) return;
+  if (params.switches.length >= MAX_INTERNAL_SWITCHES || isInternalSwitchesRestricted(params)) return;
   const before = snapshotState();
   // Offset the new switch from the last one so it doesn't start stacked
   // directly on top of an existing switch.
@@ -2484,6 +3033,24 @@ function setEngraveStyle(style) {
 document.getElementById('engraveInlayBtn').addEventListener('click', () => setEngraveStyle('inlay'));
 document.getElementById('engraveEmbossBtn').addEventListener('click', () => setEngraveStyle('emboss'));
 
+// Shared by setKeychainLoop() below AND every place params.keychainLoop can
+// change out from under the pill toggle without going through it directly
+// (undo/redo, Reset, Load Project, the autosave restore on page load) --
+// keeps the pill's visual On/Off state in sync with the real value.
+function syncKeychainLoopUI() {
+  document.getElementById('keychainLoopOnBtn').classList.toggle('active', params.keychainLoop);
+  document.getElementById('keychainLoopOffBtn').classList.toggle('active', !params.keychainLoop);
+}
+function setKeychainLoop(enabled) {
+  const before = snapshotState();
+  params.keychainLoop = enabled;
+  syncKeychainLoopUI();
+  commitHistory(before);
+  queueRebuild();
+}
+document.getElementById('keychainLoopOnBtn').addEventListener('click', () => setKeychainLoop(true));
+document.getElementById('keychainLoopOffBtn').addEventListener('click', () => setKeychainLoop(false));
+
 // Viewport display colors -- purely cosmetic (not part of params/history
 // or the exported 3mf, which always uses the printer's loaded filament),
 // just lets the preview be told apart more easily / match your filament.
@@ -2500,6 +3067,7 @@ const shapeSelectEl = document.getElementById('shapeSelect');
 shapeSelectEl.addEventListener('change', () => {
   const before = snapshotState();
   params.outlineShape = shapeSelectEl.value;
+  enforceButtonCountRestriction();
   commitHistory(before);
   buildSliders();
   queueRebuild();
@@ -2531,6 +3099,7 @@ async function handleLogoFileSelected(file) {
   logoStatusEl.className = 'clearance';
   try {
     await importLogoFile(file);
+    enforceButtonCountRestriction();
     renderLogoStatus();
     commitHistory(before);
     buildSliders();
@@ -2628,11 +3197,15 @@ function loadSampleLogo(key) {
   const def = SAMPLE_LOGOS[key];
   if (!def) return;
   const before = snapshotState();
-  const [normOutline] = normalizeLoopSets([def.loops()]);
+  // flipY: false -- these point loops are already authored in ordinary
+  // math (Y-up) convention, unlike a real PNG/SVG trace. See
+  // normalizeLoopSets() above.
+  const [normOutline] = normalizeLoopSets([def.loops()], undefined, false);
   importedLogo = {
     outlineLoops: normOutline,
     colorLayers: [],
     sourceName: `${def.label} (sample)`,
+    isSample: true, // a known, verified shape -- see isConnectedButtonsRestricted()
   };
   params.outlineShape = 'imported';
   shapeSelectEl.value = 'imported';
@@ -2730,6 +3303,7 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   document.getElementById('topColorInput').value = DEFAULT_TOP_COLOR;
   material.color.set(DEFAULT_BOTTOM_COLOR);
   topMaterial.color.set(DEFAULT_TOP_COLOR);
+  syncKeychainLoopUI();
   buildSliders();
   buildSwitchList();
   commitHistory(before);
@@ -2762,10 +3336,15 @@ loadProjectInput.addEventListener('change', async (ev) => {
     const data = JSON.parse(await file.text());
     params = { ...DEFAULTS, ...(data.params || {}) };
     importedLogo = data.importedLogo || null;
+    // Defensive -- a project file could predate this restriction (or have
+    // been hand-edited), so don't trust its buttonCount blindly.
+    enforceButtonCountRestriction();
+    enforceSingleSwitchWhenConnected();
     shapeSelectEl.value = params.outlineShape;
     textContentEl.value = params.textContent;
     textColorInputEl.value = params.textColor;
     textFontEl.value = params.textFont;
+    syncKeychainLoopUI();
     buildSliders();
     buildSwitchList();
     renderLogoStatus();
@@ -2780,15 +3359,81 @@ loadProjectInput.addEventListener('change', async (ev) => {
 });
 
 // ---------------------------------------------------------------------
+// Disclaimer + Changelog dialogs -- both just native <dialog>s, their
+// content is static HTML in index.html (kept in sync with CHANGELOG.md
+// by hand for the changelog). showModal()/close() are the only calls
+// needed; clicking the backdrop closes either, matching how <dialog> is
+// normally used elsewhere on the web.
+// ---------------------------------------------------------------------
+function wireInfoDialog(linkId, dialogId, closeBtnId) {
+  const dialog = document.getElementById(dialogId);
+  document.getElementById(linkId).addEventListener('click', () => dialog.showModal());
+  document.getElementById(closeBtnId).addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', (ev) => {
+    if (ev.target === dialog) dialog.close();
+  });
+}
+wireInfoDialog('disclaimerLink', 'disclaimerDialog', 'disclaimerCloseBtn');
+wireInfoDialog('changelogLink', 'changelogDialog', 'changelogCloseBtn');
+
+// ---------------------------------------------------------------------
+// Autosave -- separate from the explicit Save Project / Load Project
+// file-based workflow above (still useful for named/shareable project
+// files, e.g. keeping a couple of different base layouts around), this
+// silently remembers the current state in the browser itself so a plain
+// page reload never loses work. That matters especially for the
+// Connected Buttons workflow: you size a multi-button base once, then
+// come back later (maybe a different day, after closing the browser
+// entirely) to design each connected button's top separately -- without
+// this, there'd be no way to recover the exact base dimensions the tops
+// need to match. Same {params, importedLogo} shape as a saved project
+// file, just written to localStorage instead of downloaded, and updated
+// automatically at the end of every rebuild() rather than requiring a
+// manual click.
+// ---------------------------------------------------------------------
+const AUTOSAVE_KEY = 'clickerGeneratorAutosave';
+
+function autosave() {
+  try {
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({ version: 1, params, importedLogo }));
+  } catch (e) {
+    // localStorage can throw (quota exceeded, private-browsing lockdown,
+    // disabled entirely, etc.) -- losing autosave silently is fine, the
+    // explicit Save Project button above still works as a fallback.
+  }
+}
+
+function loadAutosaveData() {
+  try {
+    const raw = localStorage.getItem(AUTOSAVE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------
 async function main() {
+  const saved = loadAutosaveData();
+  if (saved && saved.params) {
+    params = { ...DEFAULTS, ...saved.params };
+    importedLogo = saved.importedLogo || null;
+    // Defensive, same as loading a project file -- an autosave written
+    // before this restriction existed could still have buttonCount > 1
+    // paired with a real (non-sample) imported logo, or with more than
+    // one internal switch.
+    enforceButtonCountRestriction();
+    enforceSingleSwitchWhenConnected();
+  }
   resizeRenderer();
   animate();
   shapeSelectEl.value = params.outlineShape;
   textContentEl.value = params.textContent;
   textColorInputEl.value = params.textColor;
   textFontEl.value = params.textFont;
+  syncKeychainLoopUI();
   buildSliders();
   buildSwitchList();
   updateUndoRedoButtons();

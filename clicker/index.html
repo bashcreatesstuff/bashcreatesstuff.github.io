@@ -186,7 +186,12 @@
       </details>
 
       <details>
-        <summary>Switches</summary>
+        <summary>Internal Switches</summary>
+        <p class="hint" style="margin-top: 0;">
+          How many switches go inside ONE button, and where. For multiple
+          separate buttons connected together, see "Connected Buttons"
+          below instead.
+        </p>
         <div class="row">
           <span class="select-label">Switch labels (in viewport)</span>
           <div class="pill-toggle" id="switchLabelsToggleGroup">
@@ -200,6 +205,49 @@
           <button id="autoSpaceSwitchesBtn" type="button" class="secondary-btn">Auto Space Switches</button>
         </div>
         <p class="clearance" id="switchSpacingReadout"></p>
+        <p class="hint bad" id="internalSwitchesRestrictionNote" style="display: none;">
+          Limited to 1 switch per button while Connected Buttons is set to
+          more than 1 -- that single switch gets repeated at every
+          connected button's position. Set Connected Buttons back to 1 to
+          add more.
+        </p>
+      </details>
+
+      <details>
+        <summary>Connected Buttons</summary>
+        <p class="hint" style="margin-top: 0;">
+          Print multiple of this same button connected together as one
+          base, each with its own switch(es) from "Internal Switches"
+          above. Each button keeps its own separate recess, so a normal
+          single top still docks into any one of them -- tops are always
+          designed and exported one at a time, with their own text/logo,
+          not connected to each other.
+        </p>
+        <div id="group-buttons"></div>
+        <p class="hint bad" id="connectedButtonsRestrictionNote" style="display: none;">
+          Disabled for this outline shape -- a real uploaded logo's
+          silhouette isn't a shape that's been checked to connect safely
+          (it could leave a gap or cut into a neighboring button's cavity
+          in a way there's no way to catch ahead of time). Circle, square,
+          triangle, and the built-in sample shapes are all safe to use here.
+        </p>
+      </details>
+
+      <details>
+        <summary>Keychain Loop</summary>
+        <p class="hint" style="margin-top: 0;">
+          Adds a loop for a keyring, fused to the far end of the button
+          row (or the button itself if there's only one). It doesn't need
+          to be as thick as the whole base -- just thick enough to hold up.
+        </p>
+        <div class="row">
+          <span class="select-label">Keychain loop</span>
+          <div class="pill-toggle" id="keychainLoopToggle">
+            <button type="button" id="keychainLoopOnBtn">On</button>
+            <button type="button" id="keychainLoopOffBtn" class="active">Off</button>
+          </div>
+        </div>
+        <div id="group-keychain"></div>
       </details>
 
       <details class="advanced-drawer">
@@ -229,8 +277,23 @@
         </details>
       </details>
 
+      <div class="row">
+        <span class="select-label">Export part</span>
+        <div class="pill-toggle" id="exportPartToggle">
+          <button type="button" id="exportPartWholeBtn" class="active">Whole scene</button>
+          <button type="button" id="exportPartBottomBtn">Bottom only</button>
+          <button type="button" id="exportPartTopBtn">Top only</button>
+        </div>
+      </div>
+      <div class="row">
+        <span class="select-label">Export format</span>
+        <div class="pill-toggle" id="exportFormatToggle">
+          <button type="button" id="exportFormat3mfBtn" class="active">3MF</button>
+          <button type="button" id="exportFormatStlBtn">STL</button>
+        </div>
+      </div>
       <div class="row buttons">
-        <button id="export3mfBtn">Download 3mf</button>
+        <button id="exportBtn">Download</button>
       </div>
       <div class="row buttons">
         <button id="saveProjectBtn" class="secondary-btn">Save Project</button>
@@ -272,8 +335,76 @@
         (a refinement of an earlier model by gcb), via
         <a href="https://www.thingiverse.com/thing:4141269" target="_blank" rel="noopener noreferrer">Thingiverse</a>.
       </p>
+      <p class="hint">
+        <button type="button" class="link-btn" id="disclaimerLink">Disclaimer</button>
+        &nbsp;&middot;&nbsp;
+        <button type="button" class="link-btn" id="changelogLink">Changelog</button>
+      </p>
     </div>
   </div>
+
+  <dialog id="disclaimerDialog" class="info-dialog">
+    <div class="info-dialog-header">
+      <h2>Disclaimer</h2>
+      <button type="button" id="disclaimerCloseBtn" class="dialog-close-btn" title="Close" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="info-dialog-body">
+      <p>
+        Provided as-is, with no warranty or guarantee of any kind. No
+        guarantee is made that generated parts are safe, accurate, or fit
+        for any particular purpose; by using this tool you agree to use
+        the generated parts at your own risk. The author offers no
+        warranty on generated parts and takes no responsibility for any
+        damage, injury, or other problems that may arise from printing or
+        using them.
+      </p>
+    </div>
+  </dialog>
+
+  <!-- Kept in sync with CHANGELOG.md by hand -- update both on every change. -->
+  <dialog id="changelogDialog" class="info-dialog">
+    <div class="info-dialog-header">
+      <h2>Changelog</h2>
+      <button type="button" id="changelogCloseBtn" class="dialog-close-btn" title="Close" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="info-dialog-body">
+      <h3>2026-08-01</h3>
+      <ul>
+        <li>Added a slight 45&deg; chamfer to the top outer edge of both the base and top pieces (shape-agnostic, works on every outline including star/heart/imported logos).</li>
+        <li>Added a Keychain Loop option: a thick, durable loop generated at the far end of the base, with sliders for outer diameter, hole diameter, thickness, and left/right offset; top edge of the loop is rounded.</li>
+        <li>Connected Buttons now automatically caps Internal Switches at 1, preventing duplicate switch instances and reference numbers when multiple buttons are connected.</li>
+        <li>Added browser autosave: the full design now persists across plain page reloads, not just via manual Save/Load Project.</li>
+        <li>Fixed star and heart sample shapes rendering upside-down.</li>
+        <li>Fixed a stale-cache bug where switching sample shapes (without changing button count) left connected buttons over- or under-overlapping until another parameter was nudged.</li>
+        <li>Fixed star and heart samples not overlapping correctly when connected, by measuring true button pitch via CSG intersection instead of bounding-box math.</li>
+        <li>Restricted Connected Buttons to primitive shapes and built-in sample logos only, since real uploaded logos didn't merge/overlap correctly.</li>
+        <li>Added export controls: download the base or top piece separately (or the whole assembly) as STL or 3MF, via Part/Format selectors.</li>
+        <li>Fixed connected buttons populating along the wrong axis (X instead of Y).</li>
+        <li>Fixed a bug where connected button bases didn't actually overlap/fuse for non-circular shapes, due to using outline diameter instead of measured shape width.</li>
+      </ul>
+      <h3>Earlier</h3>
+      <ul>
+        <li>Added the Connected Buttons feature: button count parameter, button-center and expanded-switch helpers, fused multi-button shell geometry, and updated wall-clearance checks and reference-switch/label pooling for multiple buttons.</li>
+        <li>Added a 3D view-cube gizmo (scene, camera, axis labels) rendered as an inset overlay in the viewport, with click-to-snap to standard views.</li>
+        <li>Added support for multiple internal switches per button: data model, a switch list UI (add/remove/position, capped at 4), per-switch pocket and post geometry, instanced reference switch meshes, generalized wall-clearance and switch-spacing checks, and wiring into undo/redo, save/load, and reset.</li>
+        <li>Renamed "Switches" to "Internal Switches" with a clarifying note.</li>
+        <li>Decoupled the logo from the outline shape (importing a logo no longer forces the outline shape to change) and added logo position/scale sliders.</li>
+        <li>Added built-in sample logo shapes with a gallery to pick from, later swapping the Ring sample for a Cross and switching to plain-text numbering.</li>
+        <li>Added Save Project / Load Project buttons.</li>
+        <li>Rebuilt the UI with a left-hand info/control sidebar; moved the title, status, shape dropdown, and reset button into it, later followed by the logo import section.</li>
+        <li>Added commit-based undo/redo, then converted the undo/redo/reset buttons to icons.</li>
+        <li>Added pill-toggle and section-label styling; converted the "Show assembled" checkbox to an Assembled/Exploded pill toggle; numbered the collapsible sections 1-5.</li>
+        <li>Combined the bottom and top piece export into a single 3MF download, and moved the clearance readout into the Overall Size box.</li>
+        <li>Removed outdated reference-file wording and a trailing hint paragraph.</li>
+        <li>Added and refined rounded-edge filleting on button edges: prototyped the algorithm, wired it into the top and bottom builders, fixed spike artifacts on imported logo profiles, then replaced it with a more robust per-edge wedge-tube CSG technique at a fixed, hardcoded-safe radius with a higher segment count for a smoother curve.</li>
+        <li>Added logo import support: PNG contour tracing, color-based clustering, and SVG path sampling, wired into the outline and top-piece geometry, plus a logo import UI and multi-STL export.</li>
+      </ul>
+    </div>
+  </dialog>
 
   <script type="module" src="app.js"></script>
 </body>

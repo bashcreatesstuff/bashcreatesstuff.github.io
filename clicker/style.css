@@ -548,6 +548,70 @@ details summary {
   height: 100%;
 }
 
+/* Currently-selected shape in the library (see renderShapeLibrary() in
+   app.js) -- same accent-fill treatment as an active pill-toggle button. */
+.sample-logo-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+/* The "Imported" tile before any logo's been uploaded -- present (not
+   hidden) so there's a stable, discoverable spot for it, but greyed out
+   and unclickable, same disabled treatment as everywhere else on the
+   site. */
+.sample-logo-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Text-only tiles (the dynamic "Imported" tile and saved custom samples,
+   which have no icon of their own) -- smaller type with an ellipsis so a
+   long saved name doesn't blow out the square tile. */
+.sample-logo-btn.text-tile {
+  font-size: 10px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px;
+}
+
+/* Wraps every shape-library tile so a removable (custom-saved) one's ×
+   button can sit in the corner without disturbing the .sample-gallery
+   grid sizing -- see renderShapeLibrary() in app.js. */
+.shape-tile-wrap {
+  position: relative;
+  aspect-ratio: 1;
+}
+
+.shape-tile-wrap .sample-logo-btn {
+  width: 100%;
+  height: 100%;
+}
+
+.remove-sample-btn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #f0605c;
+  color: white;
+  border: none;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remove-sample-btn:hover {
+  filter: brightness(1.15);
+}
+
 select {
   width: 100%;
   background: #1a1a2e;

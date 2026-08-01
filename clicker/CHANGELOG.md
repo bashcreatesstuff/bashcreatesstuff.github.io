@@ -12,9 +12,11 @@ All notable changes to the Clicker Generator are listed here, most recent first.
 
 ## 2026-08-01
 
+- Replaced the Basic Shapes dropdown and the separate sample gallery with a single unified Shape library: circle, square, triangle, the 4 built-in named samples, an "Imported" tile (with an upload icon), and any logo you save via "+ Save as sample" all live together as one grid of tiles (saved samples kept in your browser, with a small × to remove one). This also fixed a real conflict the old setup had -- picking a sample used to silently overwrite whatever logo you'd uploaded for the inlay/emboss overlay, since both features shared the same internal slot. A real uploaded logo now overlays correctly no matter which shape tile is selected.
+- Hid the "Switch Spacing: Safe/Close/Too Thin" readout under Switch Position -- like the controls above it, it only ever mattered with more than one switch, which isn't reachable from the UI anymore.
+- Fixed the "Imported" tile in the Shape library never actually appearing when uploading a logo (it only showed up afterward if some unrelated action happened to refresh the library, e.g. undo/redo). The tile is now always present in the library instead of appearing/disappearing -- greyed out and unclickable until a logo's loaded, then usable, and back to greyed out after a Reset (Reset still clears the uploaded logo along with the sliders, same as before).
 - Swapped the order of the Buy Me A Coffee and Boost on MakerWorld links so Buy Me A Coffee is on top.
 - Moved the corner radius slider out of "Overall size" to live right under the shape picker instead -- it's a property of the shape (square/triangle only), not the size, and stays just as visible rather than getting buried in Advanced Settings.
-- Reset now also clears an imported logo, not just the sliders -- previously it left the logo in place, which meant "Reset" didn't actually get back to a blank slate. Still a single undo step.
 - Removed the pointless "Switch 1" label in Switch Position -- it only shows a numbered header (with a remove button) when there's actually more than one switch to tell apart, e.g. after loading an older project file.
 - Fixed the up/down chevrons on front/back position sliders being swapped (down was showing on the slider's "up" end and vice versa).
 - Made the directional slider chevrons bolder and easier to see (full brightness instead of dimmed, thicker stroke, slightly larger) -- same row-height-safe layout as before.

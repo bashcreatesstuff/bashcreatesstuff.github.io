@@ -25,7 +25,10 @@ const SEGMENTS = 96; // circular resolution, equivalent to OpenSCAD's $fn
 // Default parameters -- measured from the reference STLs
 // ---------------------------------------------------------------------
 const DEFAULTS = {
-  outlineShape: 'circle',  // 'circle' | 'square' | 'triangle' | 'imported'
+  outlineShape: 'circle',  // 'circle' | 'square' | 'triangle' | a built-in
+                           // named sample (see SAMPLE_LOGOS) | 'custom:<id>'
+                           // (a saved sample, see customSamples) | 'imported'
+                           // (the current uploaded/traced logo's own silhouette)
   outlineDiameter: 55.5,   // diameter of the circle THAT THE SHAPE IS INSCRIBED IN --
                            // keeps "size" meaning consistent across shapes so every
                            // downstream wall/pocket calculation doesn't need to care
@@ -44,12 +47,13 @@ const DEFAULTS = {
                            // 'emboss' = raised relief on top of the face,
                            // prints face-up, also support-free since the
                            // raised bits sit directly on solid material.
-  logoMargin: 2,           // buffer ring of plain cap material between the
-                           // traced logo's outer edge and the cap's own
-                           // outer edge, so the logo doesn't run right up
-                           // to the rim (only used when outlineShape is
-                           // 'imported', i.e. the outline itself hugs the
-                           // logo's own silhouette)
+  logoMargin: 2,           // buffer ring of plain cap material between a
+                           // loop-based outline's own outer edge and the
+                           // cap's own outer edge, so it doesn't run right
+                           // up to the rim (only used when outlineShape is
+                           // loop-based -- 'imported', a named sample, or a
+                           // custom saved sample -- i.e. the outline itself
+                           // hugs that shape's own silhouette)
   // Logo-as-overlay controls -- independent of outline shape, these place
   // the logo's color layers as their own inlay/emboss (same mechanism as
   // custom text below) on top of whatever shape is picked, so a logo can
@@ -525,7 +529,6 @@ async function importLogoFromPNG(file, colorCount) {
     outlineLoops: normOutline,
     colorLayers: colorLayersPixel.map((layer, i) => ({ hex: layer.hex, loops: normColorLoops[i] })),
     sourceName: file.name,
-    isSample: false, // a real upload -- see isConnectedButtonsRestricted()
   };
 }
 
@@ -631,7 +634,6 @@ async function importLogoFromSVG(file) {
     outlineLoops: normOutline,
     colorLayers: colorLayersRaw.map((layer, i) => ({ hex: layer.hex, loops: normColorLoops[i] })),
     sourceName: file.name,
-    isSample: false, // a real upload -- see isConnectedButtonsRestricted()
   };
 }
 
@@ -692,34 +694,77 @@ function outline2D(arena, p) {
       const tri = arena.track(new CrossSection([pts]));
       return roundCorners(arena, tri, r);
     }
-    case 'imported': {
-      if (!importedLogo || importedLogo.outlineLoops.length === 0) {
-        // No logo loaded yet (or it failed to trace anything) -- fall
-        // back to a circle rather than producing an empty/invalid part.
+    case 'circle':
+      return arena.track(CrossSection.circle(R, SEGMENTS));
+    default: {
+      // Every other outlineShape value is loop-based: a built-in named
+      // shape (heart/star/cross/hexagon -- see namedShapeLoops() below), a
+      // custom saved sample ('custom:<id>', looked up in customSamples),
+      // or a real uploaded/traced logo ('imported', reading the
+      // module-level importedLogo variable). All three share the exact
+      // same treatment once resolved to a loop set, so they fall through
+      // to one shared code path rather than three near-identical cases.
+      const loops = resolveOutlineLoops(p.outlineShape);
+      if (!loops || loops.length === 0) {
+        // Nothing resolved (e.g. outlineShape is 'imported' but no logo's
+        // been loaded yet, or a custom sample got deleted) -- fall back to
+        // a circle rather than producing an empty/invalid part.
         return arena.track(CrossSection.circle(R, SEGMENTS));
       }
-      const loops = importedLogo.outlineLoops.map((loop) => loop.map(([x, y]) => [x * R, y * R]));
-      const logoShape = arena.track(new CrossSection(loops, 'EvenOdd'));
+      const scaled = loops.map((loop) => loop.map(([x, y]) => [x * R, y * R]));
+      const logoShape = arena.track(new CrossSection(scaled, 'EvenOdd'));
       // Everywhere else, outline2D() IS the outer/bottom boundary and the
       // top cap's visible face is inset from it by (bottomWall +
       // fitClearance) so it nests inside the bottom's rim wall (see
-      // capProfile in buildTop). For an imported logo that inset would
-      // silently crop the artwork's own outer edge (e.g. a border stroke
-      // traced right at the silhouette boundary) off of the visible top
-      // face. So here we expand the traced shape outward by that same
-      // inset first -- the downstream inset then cancels it back out,
-      // landing the cap face exactly on the traced artwork, while the
-      // bottom/skirt grow outward by the wall amount to make room, same
-      // as any other imported shape needs a wall around it. logoMargin
-      // adds extra beyond that so the cap face itself has a plain buffer
-      // ring around the logo instead of the artwork running to the rim.
+      // capProfile in buildTop). For a loop-based shape like this, that
+      // inset would silently crop the artwork's own outer edge (e.g. a
+      // border stroke traced right at the silhouette boundary) off of the
+      // visible top face. So here we expand the traced shape outward by
+      // that same inset first -- the downstream inset then cancels it
+      // back out, landing the cap face exactly on the traced artwork,
+      // while the bottom/skirt grow outward by the wall amount to make
+      // room, same as any loop-based shape needs a wall around it.
+      // logoMargin adds extra beyond that so the cap face itself has a
+      // plain buffer ring around the shape instead of it running to the rim.
       const capInset = p.bottomWall + p.fitClearance + (p.logoMargin || 0);
       return offsetOf(arena, logoShape, capInset);
     }
-    case 'circle':
-    default:
-      return arena.track(CrossSection.circle(R, SEGMENTS));
   }
+}
+
+// Resolves an outlineShape value to a normalized (Y-up, unit-diagonal)
+// loop set -- the one thing 'imported', a built-in named sample, and a
+// custom saved sample all have in common, and the only per-shape lookup
+// outline2D()'s default case above needs. Returns null/empty when there's
+// nothing to show yet (falls back to a circle).
+function resolveOutlineLoops(outlineShape) {
+  if (outlineShape === 'imported') {
+    return importedLogo ? importedLogo.outlineLoops : null;
+  }
+  if (SAMPLE_LOGOS[outlineShape]) {
+    return namedShapeLoops(outlineShape);
+  }
+  if (typeof outlineShape === 'string' && outlineShape.startsWith('custom:')) {
+    const entry = customSamples.find((s) => s.id === outlineShape.slice('custom:'.length));
+    return entry ? entry.outlineLoops : null;
+  }
+  return null;
+}
+
+// Lazily normalizes each built-in named shape's raw point loop exactly
+// once (they're static -- see SAMPLE_LOGOS below) and caches the result,
+// since outline2D() calls this on every rebuild.
+const _namedShapeLoopCache = {};
+function namedShapeLoops(key) {
+  if (_namedShapeLoopCache[key]) return _namedShapeLoopCache[key];
+  const def = SAMPLE_LOGOS[key];
+  if (!def) return null;
+  // flipY: false -- these point loops are already authored in ordinary
+  // math (Y-up) convention, unlike a real PNG/SVG trace. See
+  // normalizeLoopSets() above.
+  const [normOutline] = normalizeLoopSets([def.loops()], undefined, false);
+  _namedShapeLoopCache[key] = normOutline;
+  return normOutline;
 }
 
 // Same normalized-loop -> scaled-CrossSection conversion as the
@@ -891,13 +936,15 @@ function crossSocket2D(arena, width, armWidth) {
 // getButtonCenters() below is called many times per rebuild -- only
 // actually re-measures when something that could affect the shape has
 // changed. IMPORTANT: outline2D()'s 'imported' case reads the module-level
-// `importedLogo` variable, not anything in `p` -- switching between sample
-// logos (or uploading a new one) never changes params.outlineShape (it's
-// 'imported' before and after), so a cache key built from `p` alone can't
-// tell the shape changed at all, and would keep returning the PREVIOUS
-// logo's pitch until some unrelated param (like buttonCount itself) also
-// happened to change. Folding in importedLogo's own outline data closes
-// that gap.
+// `importedLogo` variable, not anything in `p` -- uploading a new logo
+// while outlineShape is already 'imported' doesn't change
+// params.outlineShape at all, so a cache key built from `p` alone can't
+// tell the shape changed, and would keep returning the PREVIOUS logo's
+// pitch until some unrelated param (like buttonCount itself) also happened
+// to change. Folding in importedLogo's own outline data closes that gap.
+// (Named samples and custom saved samples don't need this -- their outline
+// data is immutable once picked, and params.outlineShape itself changes to
+// select a different one, so `p` alone already captures it.)
 let _pitchCacheKey = null;
 let _pitchCacheValue = null;
 function measureButtonPitch(p, arena) {
@@ -949,21 +996,26 @@ function getButtonCenters(p, arena) {
   return centers;
 }
 
-// Connected buttons are only allowed for a shape whose connection behavior
-// has actually been checked: circle/square/triangle (simple, provably
-// symmetric primitives) and the 4 built-in sample logos (a small, fixed
-// set -- see measureButtonPitch() above for exactly what "checked" means
-// here). A REAL uploaded SVG/PNG logo's silhouette is unpredictable --
-// there's no way to verify ahead of time that its connection point won't
-// land on a thin feature or cut into a neighboring button's cavity, the
-// same class of problem measureButtonPitch()'s binary search fixed for
-// the star/heart samples, but which can't be fixed in general for an
-// arbitrary shape nobody's looked at. `importedLogo` with no `isSample`
-// flag (or missing entirely, e.g. outlineShape freshly switched to
-// 'imported' before any logo/sample has been loaded, which falls back to
-// a plain circle in outline2D()) is treated as unverified and restricted.
+// A shape whose connection behavior has actually been checked: the 3
+// primitives (simple, provably symmetric) plus the 4 built-in named
+// samples (a small, fixed set -- see measureButtonPitch() above for
+// exactly what "checked" means here). Shared with isTextRestricted()
+// below, which draws the line in a different place (primitives only --
+// see its own comment).
+const PRIMITIVE_OUTLINE_SHAPES = new Set(['circle', 'square', 'triangle']);
+const VERIFIED_NAMED_SHAPES = new Set(['heart', 'star', 'cross', 'hexagon']);
+
+// Connected buttons are only allowed for a verified shape (see the two sets
+// above). A real uploaded/traced logo's silhouette -- whether picked fresh
+// via 'imported' or reselected later from the personal sample gallery
+// ('custom:<id>') -- is unpredictable: there's no way to verify ahead of
+// time that its connection point won't land on a thin feature or cut into
+// a neighboring button's cavity, the same class of problem
+// measureButtonPitch()'s binary search fixed for the star/heart samples,
+// but which can't be fixed in general for an arbitrary shape nobody's
+// looked at.
 function isConnectedButtonsRestricted(p) {
-  return p.outlineShape === 'imported' && !(importedLogo && importedLogo.isSample);
+  return !(PRIMITIVE_OUTLINE_SHAPES.has(p.outlineShape) || VERIFIED_NAMED_SHAPES.has(p.outlineShape));
 }
 
 // Clamps buttonCount back to 1 whenever the current outline just became a
@@ -1001,15 +1053,17 @@ function enforceSingleSwitchWhenConnected() {
 }
 
 // Text is an independent overlay clipped to the cap's own footprint (see
-// buildTop() below) -- but when the outline shape itself IS the imported
-// logo, that footprint is the logo's own irregular silhouette, and
-// centered text on an arbitrary/concave shape like that is liable to get
-// clipped oddly or collide with the logo artwork underneath it. Disabled
-// whenever the outline shape is 'imported', built-in samples included
-// (same as a real upload -- the concern here is the shape's geometry,
-// not upload provenance, unlike isConnectedButtonsRestricted() above).
+// buildTop() below) -- but when the outline shape itself is anything other
+// than a plain primitive, that footprint is that shape's own irregular
+// silhouette (heart, star, cross, hexagon, a custom saved sample, or a
+// real uploaded logo), and centered text on an arbitrary/concave shape
+// like that is liable to get clipped oddly or collide with the artwork
+// underneath it. Disabled for every non-primitive outline shape -- the
+// concern here is the shape's geometry, not upload provenance, unlike
+// isConnectedButtonsRestricted() above, which treats the 4 named samples
+// as safe but everything else loop-based as unverified.
 function isTextRestricted(p) {
-  return p.outlineShape === 'imported';
+  return !PRIMITIVE_OUTLINE_SHAPES.has(p.outlineShape);
 }
 
 // p.switches is defined relative to a single button's own center -- this
@@ -2700,7 +2754,7 @@ function commitHistory(before) {
 function applySnapshot(snap) {
   params = { ...snap.params };
   importedLogo = snap.importedLogo;
-  shapeSelectEl.value = params.outlineShape;
+  renderShapeLibrary();
   textContentEl.value = params.textContent;
   textColorInputEl.value = params.textColor;
   textFontEl.value = params.textFont;
@@ -2878,7 +2932,7 @@ function buildSliders() {
     for (const def of defs) {
       const disabled =
         (def.key === 'outlineCornerRadius' && params.outlineShape !== 'square' && params.outlineShape !== 'triangle') ||
-        (def.key === 'logoMargin' && params.outlineShape !== 'imported') ||
+        (def.key === 'logoMargin' && PRIMITIVE_OUTLINE_SHAPES.has(params.outlineShape)) ||
         (def.key === 'buttonCount' && isConnectedButtonsRestricted(params)) ||
         (groupId === 'group-text' && isTextRestricted(params));
       const row = createSliderRow({
@@ -3137,18 +3191,13 @@ document.getElementById('topColorInput').addEventListener('input', (ev) => {
   topMaterial.color.set(ev.target.value);
 });
 
-const shapeSelectEl = document.getElementById('shapeSelect');
-shapeSelectEl.addEventListener('change', () => {
-  const before = snapshotState();
-  params.outlineShape = shapeSelectEl.value;
-  enforceButtonCountRestriction();
-  commitHistory(before);
-  buildSliders();
-  queueRebuild();
-});
-
 const logoStatusEl = document.getElementById('logoStatus');
 function renderLogoStatus() {
+  // "Save as sample" needs an uploaded logo to save -- see
+  // saveCurrentLogoAsSample() further down.
+  const saveBtn = document.getElementById('saveSampleBtn');
+  if (saveBtn) saveBtn.style.display = importedLogo ? '' : 'none';
+
   if (!importedLogo) {
     logoStatusEl.textContent = '';
     logoStatusEl.className = 'clearance';
@@ -3175,6 +3224,7 @@ async function handleLogoFileSelected(file) {
     await importLogoFile(file);
     enforceButtonCountRestriction();
     renderLogoStatus();
+    renderShapeLibrary();
     commitHistory(before);
     buildSliders();
     rebuild();
@@ -3209,12 +3259,13 @@ logoDropzone.addEventListener('drop', (ev) => {
 });
 
 // ---------------------------------------------------------------------
-// Built-in sample logos -- a few parametric shapes so there's something
+// Built-in named shapes -- a few parametric outlines so there's something
 // to try instantly, without needing to go find/prepare an SVG or PNG
 // first. Each is just a raw point loop in an arbitrary local scale;
 // normalizeLoopSets() (already used by the SVG/PNG import path above)
 // puts it into the same centered/unit-diagonal space every outline
-// shape shares, so these behave exactly like an imported logo downstream.
+// shape shares. Resolved into actual geometry by namedShapeLoops() /
+// resolveOutlineLoops() above -- this is just the raw point data.
 function heartLoopPoints(n = 60) {
   const pts = [];
   for (let i = 0; i < n; i++) {
@@ -3267,31 +3318,166 @@ const SAMPLE_LOGOS = {
   hexagon: { label: 'Hexagon', loops: () => [hexagonLoopPoints()] },
 };
 
-function loadSampleLogo(key) {
-  const def = SAMPLE_LOGOS[key];
-  if (!def) return;
-  const before = snapshotState();
-  // flipY: false -- these point loops are already authored in ordinary
-  // math (Y-up) convention, unlike a real PNG/SVG trace. See
-  // normalizeLoopSets() above.
-  const [normOutline] = normalizeLoopSets([def.loops()], undefined, false);
-  importedLogo = {
-    outlineLoops: normOutline,
-    colorLayers: [],
-    sourceName: `${def.label} (sample)`,
-    isSample: true, // a known, verified shape -- see isConnectedButtonsRestricted()
+// ---------------------------------------------------------------------
+// Shape library -- one grid of clickable tiles for every outline shape:
+// the 3 primitives, the 4 built-in named samples above, an "Imported"
+// tile (always present, greyed out until a real logo's been
+// uploaded/traced -- see renderShapeLibrary() below), and any custom
+// samples saved from a real upload (see
+// saveCurrentLogoAsSample() below). Replaces the old separate "Basic
+// Clicker Shapes" dropdown plus a disconnected sample gallery -- picking
+// a named sample used to hijack the SAME `importedLogo` slot the Logo
+// Import overlay feature needs, silently wiping out any real logo you'd
+// uploaded for overlay the moment you tried a sample. Named/custom
+// samples now resolve their own outline loops independently (see
+// resolveOutlineLoops() above), so importedLogo is reserved purely for a
+// real upload and stays intact -- and still renders as its inlay/emboss
+// overlay -- no matter which tile in this library is currently selected.
+// ---------------------------------------------------------------------
+// Same glyph as the dropzone's own upload icon below, reused here so the
+// dynamic "Imported" tile reads as "your uploaded file" at a glance
+// instead of needing its label text to carry that on its own.
+const IMPORTED_TILE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>';
+
+const BUILTIN_SHAPE_TILES = [
+  { key: 'circle', label: 'Circle', svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle></svg>' },
+  { key: 'square', label: 'Square', svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16"></rect></svg>' },
+  { key: 'triangle', label: 'Triangle', svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="12,3 21,20 3,20"></polygon></svg>' },
+  { key: 'heart', label: 'Heart', svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>' },
+  { key: 'star', label: 'Star', svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14l-5-4.87 6.91-1.01L12 2z"></path></svg>' },
+  { key: 'cross', label: 'Cross', svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="15,3 15,9 21,9 21,15 15,15 15,21 9,21 9,15 3,15 3,9 9,9 9,3"></polygon></svg>' },
+  { key: 'hexagon', label: 'Hexagon', svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="12,3 4,8 4,16 12,21 20,16 20,8"></polygon></svg>' },
+];
+
+const shapeLibraryEl = document.getElementById('shapeLibrary');
+
+// Call anywhere params.outlineShape could have just changed (a tile click,
+// undo/redo, Reset, Load Project, the autosave restore on page load) --
+// keeps the grid's highlighted tile in sync, and updates the "Imported"
+// tile's enabled state as importedLogo comes and goes.
+function renderShapeLibrary() {
+  shapeLibraryEl.innerHTML = '';
+
+  const addTile = ({ key, label, svg, removable, disabled }) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'shape-tile-wrap';
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sample-logo-btn';
+    btn.title = label;
+    btn.disabled = !!disabled;
+    btn.classList.toggle('active', params.outlineShape === key);
+    if (svg) {
+      btn.innerHTML = svg;
+    } else {
+      btn.textContent = label;
+      btn.classList.add('text-tile');
+    }
+    btn.addEventListener('click', () => selectOutlineShape(key));
+    wrap.appendChild(btn);
+
+    if (removable) {
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'remove-sample-btn';
+      removeBtn.title = `Remove "${label}"`;
+      removeBtn.textContent = '×';
+      removeBtn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        removeCustomSample(key.slice('custom:'.length));
+      });
+      wrap.appendChild(removeBtn);
+    }
+
+    shapeLibraryEl.appendChild(wrap);
   };
-  params.outlineShape = 'imported';
-  shapeSelectEl.value = 'imported';
-  renderLogoStatus();
+
+  BUILTIN_SHAPE_TILES.forEach(addTile);
+  // Always present (unlike custom saved samples below), just greyed out
+  // and unclickable until there's actually a logo loaded -- so the tile's
+  // position in the grid is stable and it's discoverable ("there's a spot
+  // for your logo") rather than appearing out of nowhere only after you've
+  // already found the upload dropzone some other way.
+  addTile({
+    key: 'imported',
+    label: importedLogo ? 'Imported' : 'Upload a logo to use this',
+    svg: IMPORTED_TILE_SVG,
+    disabled: !importedLogo,
+  });
+  customSamples.forEach((entry) => {
+    addTile({ key: `custom:${entry.id}`, label: entry.label, removable: true });
+  });
+}
+
+function selectOutlineShape(key) {
+  if (params.outlineShape === key) return;
+  const before = snapshotState();
+  params.outlineShape = key;
+  enforceButtonCountRestriction();
   commitHistory(before);
   buildSliders();
+  renderShapeLibrary();
   rebuild();
 }
 
-document.querySelectorAll('.sample-logo-btn').forEach((btn) => {
-  btn.addEventListener('click', () => loadSampleLogo(btn.dataset.sample));
-});
+// ---------------------------------------------------------------------
+// Personal sample gallery -- lets a real uploaded/traced logo be saved
+// and reselected with one click later, the same way the built-in named
+// samples work, instead of re-uploading the file every time. Stored in
+// localStorage (same "fails silently" pattern as autosave() below), so
+// it's per-browser, not baked into the app itself. A real traced outline,
+// not a known-safe primitive/named shape, so Connected Buttons
+// restrictions still apply -- see isConnectedButtonsRestricted() above.
+// ---------------------------------------------------------------------
+const CUSTOM_SAMPLES_KEY = 'clickerGeneratorCustomSamples';
+let customSamples = [];
+
+function loadCustomSamplesFromStorage() {
+  try {
+    const raw = localStorage.getItem(CUSTOM_SAMPLES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveCustomSamplesToStorage() {
+  try {
+    localStorage.setItem(CUSTOM_SAMPLES_KEY, JSON.stringify(customSamples));
+  } catch (e) {
+    // quota exceeded, private browsing, disabled, etc. -- losing the saved
+    // gallery silently is fine, nothing else depends on it.
+  }
+}
+
+function removeCustomSample(id) {
+  customSamples = customSamples.filter((s) => s.id !== id);
+  saveCustomSamplesToStorage();
+  // A removed sample can't stay selected -- fall back to circle if it was.
+  if (params.outlineShape === `custom:${id}`) {
+    selectOutlineShape('circle');
+  } else {
+    renderShapeLibrary();
+  }
+}
+
+function saveCurrentLogoAsSample() {
+  if (!importedLogo) return;
+  const defaultName = importedLogo.sourceName.replace(/\.[a-z0-9]+$/i, '').slice(0, 30) || 'My logo';
+  const label = window.prompt('Name this sample:', defaultName);
+  if (!label) return;
+  customSamples.push({
+    id: `cs${Date.now()}${Math.random().toString(36).slice(2, 6)}`,
+    label: label.trim().slice(0, 30) || defaultName,
+    outlineLoops: importedLogo.outlineLoops,
+    colorLayers: importedLogo.colorLayers,
+  });
+  saveCustomSamplesToStorage();
+  renderShapeLibrary();
+}
+
+document.getElementById('saveSampleBtn').addEventListener('click', saveCurrentLogoAsSample);
 
 // Text content/color -- same "one undo step per editing session, not per
 // keystroke" pattern as the sliders: snapshot on the first change since
@@ -3373,10 +3559,12 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   // "Reset" wouldn't actually get back to a truly blank slate. Still one
   // undo step: importedLogo is already part of snapshotState()/
   // applySnapshot(), so this is fully covered by the commitHistory() below.
+  // The "Imported" library tile stays put either way (see
+  // renderShapeLibrary()) -- it just goes back to greyed out/unclickable.
   importedLogo = null;
   document.getElementById('logoFileInput').value = '';
   renderLogoStatus();
-  shapeSelectEl.value = params.outlineShape;
+  renderShapeLibrary();
   textContentEl.value = params.textContent;
   textColorInputEl.value = params.textColor;
   textFontEl.value = params.textFont;
@@ -3421,7 +3609,7 @@ loadProjectInput.addEventListener('change', async (ev) => {
     // been hand-edited), so don't trust its buttonCount blindly.
     enforceButtonCountRestriction();
     enforceSingleSwitchWhenConnected();
-    shapeSelectEl.value = params.outlineShape;
+    renderShapeLibrary();
     textContentEl.value = params.textContent;
     textColorInputEl.value = params.textColor;
     textFontEl.value = params.textFont;
@@ -3530,7 +3718,9 @@ async function main() {
   }
   resizeRenderer();
   animate();
-  shapeSelectEl.value = params.outlineShape;
+  customSamples = loadCustomSamplesFromStorage();
+  renderShapeLibrary();
+  renderLogoStatus();
   textContentEl.value = params.textContent;
   textColorInputEl.value = params.textColor;
   textFontEl.value = params.textFont;

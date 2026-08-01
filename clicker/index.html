@@ -30,15 +30,16 @@
       <p class="tagline">Vibe coded by Claude, with minor help and supervision by <a href="https://makerworld.com/en/@BashCreates" target="_blank" rel="noopener noreferrer">Bash Creates</a> <span class="emote">&#128514;</span></p>
       <p class="status" id="status">Loading geometry engine&hellip;</p>
 
-      <div class="row">
-        <label for="shapeSelect" class="select-label">Basic Clicker Shapes</label>
-        <select id="shapeSelect">
-          <option value="circle">Circle</option>
-          <option value="square">Square</option>
-          <option value="triangle">Triangle</option>
-          <option value="imported">Imported logo</option>
-        </select>
-      </div>
+      <span class="select-label">Shape</span>
+      <!-- Fully JS-rendered by renderShapeLibrary() in app.js -- the 3
+           primitives + 4 built-in named samples always show; the
+           "Imported" tile is always present too, but greyed out/unclickable
+           until a real logo's actually loaded, plus any saved custom
+           samples (see saveCurrentLogoAsSample()). Replaces the old
+           separate Basic Shapes dropdown + sample gallery, so a logo
+           uploaded for overlay use no longer gets silently wiped out by
+           picking a sample -- see the long comment in app.js. -->
+      <div class="sample-gallery" id="shapeLibrary"></div>
       <!-- Lives right under the shape picker (not tucked into Overall
            size) since it's a property of the SHAPE, not the size -- only
            does anything for square/triangle, greyed out otherwise. -->
@@ -53,31 +54,22 @@
           <input type="file" id="logoFileInput" accept=".svg,.png,image/svg+xml,image/png" style="display:none" />
         </label>
         <p class="clearance" id="logoStatus"></p>
-        <span class="select-label">Or try a sample</span>
-        <div class="sample-gallery">
-          <button type="button" class="sample-logo-btn" data-sample="heart" title="Heart">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
-          </button>
-          <button type="button" class="sample-logo-btn" data-sample="star" title="Star">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14l-5-4.87 6.91-1.01L12 2z"></path></svg>
-          </button>
-          <button type="button" class="sample-logo-btn" data-sample="cross" title="Cross">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="15,3 15,9 21,9 21,15 15,15 15,21 9,21 9,15 3,15 3,9 9,9 9,3"></polygon></svg>
-          </button>
-          <button type="button" class="sample-logo-btn" data-sample="hexagon" title="Hexagon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="12,3 4,8 4,16 12,21 20,16 20,8"></polygon></svg>
-          </button>
-        </div>
+        <!-- Only shown once a real logo is loaded. Saves
+             outlineLoops/colorLayers into the Shape library above (as a
+             new "custom:<id>" tile) kept in localStorage -- see
+             saveCurrentLogoAsSample() in app.js. -->
+        <button type="button" class="link-btn" id="saveSampleBtn" style="display: none; margin: -8px 0 10px;">+ Save as sample</button>
         <details>
           <summary>More info</summary>
           <p class="hint">
             An uploaded logo renders as its own inlay/emboss layer on
             whatever shape is picked above (Circle, Square, etc.), so it can
-            share the button with custom text. Pick "Imported logo" as the
-            shape instead if you'd rather the whole button's outline hug the
-            logo's own silhouette. SVG gives exact vector results. PNG works
-            too (traced + color quantized in-browser) but quality depends on
-            the source image -- flat colors and clean edges trace best.
+            share the button with custom text. Pick the "Imported" tile in
+            the shape library instead if you'd rather the whole button's
+            outline hug the logo's own silhouette. SVG gives exact
+            vector results. PNG works too (traced + color quantized
+            in-browser) but quality depends on the source image -- flat
+            colors and clean edges trace best.
           </p>
         </details>
       </details>
@@ -254,9 +246,12 @@
             <button id="addSwitchBtn" type="button" class="secondary-btn">+ Add switch</button>
             <button id="autoSpaceSwitchesBtn" type="button" class="secondary-btn">Auto Space Switches</button>
           </div>
-          <p class="clearance" id="switchSpacingReadout"></p>
-          <!-- Only ever relevant when more than one switch exists, which
-               isn't reachable from the UI anymore -- hidden, not removed. -->
+          <!-- Both only ever relevant when more than one switch exists,
+               which isn't reachable from the UI anymore -- hidden, not
+               removed. updateSwitchSpacingReadout() below still runs and
+               keeps switchSpacingReadout's text/class up to date, just
+               invisibly. -->
+          <p class="clearance" id="switchSpacingReadout" style="display: none;"></p>
           <div style="display: none;">
             <p class="hint bad" id="internalSwitchesRestrictionNote">
               Limited to 1 switch while Connected Buttons &gt; 1.
@@ -408,9 +403,11 @@
     <div class="info-dialog-body">
       <h3>2026-08-01</h3>
       <ul>
+        <li>Replaced the Basic Shapes dropdown and separate sample gallery with one unified Shape library grid (circle/square/triangle/samples/saved logos, "Imported" tile now has an upload icon), and fixed picking a sample silently overwriting an uploaded overlay logo.</li>
+        <li>Hid the "Switch Spacing" readout under Switch Position -- no longer relevant now that the UI can't create more than one switch.</li>
+        <li>Fixed the "Imported" tile in the Shape library not showing up right after uploading a logo. The tile is now always visible (greyed out until a logo's loaded, back to greyed out after Reset) instead of appearing/disappearing.</li>
         <li>Swapped the order of the Buy Me A Coffee and Boost on MakerWorld links so Buy Me A Coffee is on top.</li>
         <li>Moved the corner radius slider out of "Overall size" to live right under the shape picker instead -- it's a property of the shape (square/triangle only), not the size, and stays just as visible rather than getting buried in Advanced Settings.</li>
-        <li>Reset now also clears an imported logo, not just the sliders -- previously it left the logo in place, which meant "Reset" didn't actually get back to a blank slate. Still a single undo step.</li>
         <li>Removed the pointless "Switch 1" label in Switch Position -- it only shows a numbered header (with a remove button) when there's actually more than one switch to tell apart, e.g. after loading an older project file.</li>
         <li>Fixed the up/down chevrons on front/back position sliders being swapped (down was showing on the slider's "up" end and vice versa).</li>
         <li>Made the directional slider chevrons bolder and easier to see (full brightness instead of dimmed, thicker stroke, slightly larger) -- same row-height-safe layout as before.</li>

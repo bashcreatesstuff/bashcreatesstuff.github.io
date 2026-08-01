@@ -1000,6 +1000,18 @@ function enforceSingleSwitchWhenConnected() {
   }
 }
 
+// Text is an independent overlay clipped to the cap's own footprint (see
+// buildTop() below) -- but when the outline shape itself IS the imported
+// logo, that footprint is the logo's own irregular silhouette, and
+// centered text on an arbitrary/concave shape like that is liable to get
+// clipped oddly or collide with the logo artwork underneath it. Disabled
+// whenever the outline shape is 'imported', built-in samples included
+// (same as a real upload -- the concern here is the shape's geometry,
+// not upload provenance, unlike isConnectedButtonsRestricted() above).
+function isTextRestricted(p) {
+  return p.outlineShape === 'imported';
+}
+
 // p.switches is defined relative to a single button's own center -- this
 // expands it into absolute positions across every connected button (e.g.
 // 2 buttons x 2 internal switches = 4 absolute positions). Used for
@@ -1602,12 +1614,15 @@ function buildTop(arena, p) {
     }
   }
 
-  // Custom text -- independent of outline shape/logo, an optional extra
-  // inlay or emboss (same approach as the logo color layers above) so a
-  // name, date, or short message can be added to ANY shape, imported logo
-  // or not. Clipped to the cap's own footprint so it can never overhang
-  // the actual printed edge regardless of where it's positioned.
-  if (p.textContent && p.textContent.trim() && p.textSize > 0) {
+  // Custom text -- an optional extra inlay or emboss (same approach as
+  // the logo color layers above) so a name, date, or short message can be
+  // added to a plain-shape button. Clipped to the cap's own footprint so
+  // it can never overhang the actual printed edge regardless of where
+  // it's positioned. Skipped entirely when the outline shape itself is
+  // the imported logo (see isTextRestricted() above) -- even if
+  // params.textContent has leftover text from an earlier shape, it
+  // doesn't get baked into geometry the UI shows as disabled.
+  if (!isTextRestricted(p) && p.textContent && p.textContent.trim() && p.textSize > 0) {
     const textLoops = textToMmLoops(p.textContent, p.textSize, p.textLineSpacing, p.textFont);
     if (textLoops && textLoops.length > 0) {
       let text2D = arena.track(new CrossSection(textLoops, 'EvenOdd'));
@@ -1925,7 +1940,11 @@ for (let i = 0; i < MAX_TOTAL_SWITCHES; i++) {
 let showReferenceSwitch = true; // UI toggle state, not part of params/history
 
 function updateReferenceSwitchVisibility() {
-  const show = showReferenceSwitch && !assembledView;
+  // Shown in both Assembled and Exploded view now -- positionReferenceSwitch()
+  // already tracks bottomMesh's own live position each rebuild, so the
+  // switch stays correctly seated in its cavity either way, purely gated
+  // on the Show/Hide toggle below.
+  const show = showReferenceSwitch;
   const switches = getExpandedSwitches(params);
   for (let i = 0; i < referenceSwitchMeshes.length; i++) {
     referenceSwitchMeshes[i].visible = show && i < switches.length;
@@ -2581,14 +2600,16 @@ document.getElementById('exportBtn').addEventListener('click', () => {
 // Sliders
 // ---------------------------------------------------------------------
 const SLIDER_DEFS = {
+  'group-shape': [
+    { key: 'outlineCornerRadius', label: 'Corner radius (square/triangle only)', min: 0, max: 20, step: 0.2, unit: 'mm' },
+  ],
   'group-overall': [
     { key: 'outlineDiameter', label: 'Overall diameter', min: 20, max: 90, step: 0.5, unit: 'mm' },
-    { key: 'outlineCornerRadius', label: 'Corner radius (square/triangle only)', min: 0, max: 20, step: 0.2, unit: 'mm' },
   ],
   'group-text': [
     { key: 'textSize', label: 'Text size', min: 2, max: 20, step: 0.5, unit: 'mm' },
-    { key: 'textOffsetX', label: 'Text position (left/right)', min: -40, max: 40, step: 0.5, unit: 'mm' },
-    { key: 'textOffsetY', label: 'Text position (fwd/back)', min: -40, max: 40, step: 0.5, unit: 'mm' },
+    { key: 'textOffsetX', label: 'Text position (left/right)', min: -40, max: 40, step: 0.5, unit: 'mm', dir: 'x' },
+    { key: 'textOffsetY', label: 'Text position (fwd/back)', min: -40, max: 40, step: 0.5, unit: 'mm', dir: 'y' },
     { key: 'textRotation', label: 'Text rotation', min: -180, max: 180, step: 1, unit: '°' },
     { key: 'textLineSpacing', label: 'Line spacing', min: 0.5, max: 2.5, step: 0.05, unit: '×' },
     { key: 'textEmbossHeight', label: 'Emboss/recess height', min: 0.2, max: 2.5, step: 0.1, unit: 'mm' },
@@ -2608,7 +2629,7 @@ const SLIDER_DEFS = {
     { key: 'keychainLoopOuterD', label: 'Loop outer diameter', min: 8, max: 30, step: 0.5, unit: 'mm' },
     { key: 'keychainLoopHoleD', label: 'Loop hole diameter', min: 3, max: 15, step: 0.5, unit: 'mm' },
     { key: 'keychainLoopThickness', label: 'Loop thickness', min: 2, max: 12, step: 0.2, unit: 'mm' },
-    { key: 'keychainLoopOffsetX', label: 'Loop position (left/right)', min: -30, max: 30, step: 0.5, unit: 'mm' },
+    { key: 'keychainLoopOffsetX', label: 'Loop position (left/right)', min: -30, max: 30, step: 0.5, unit: 'mm', dir: 'x' },
   ],
   'group-bottom': [
     { key: 'bottomWall', label: 'Outer wall thickness', min: 1, max: 6, step: 0.1, unit: 'mm' },
@@ -2630,8 +2651,8 @@ const SLIDER_DEFS = {
     { key: 'logoMargin', label: 'Buffer around logo (imported-shape outline only)', min: 0, max: 8, step: 0.5, unit: 'mm' },
     { key: 'logoEmbossHeight', label: 'Emboss/recess height', min: 0.2, max: 2.5, step: 0.1, unit: 'mm' },
     { key: 'logoSize', label: 'Logo size', min: 5, max: 90, step: 0.5, unit: 'mm' },
-    { key: 'logoOffsetX', label: 'Logo position (left/right)', min: -40, max: 40, step: 0.5, unit: 'mm' },
-    { key: 'logoOffsetY', label: 'Logo position (fwd/back)', min: -40, max: 40, step: 0.5, unit: 'mm' },
+    { key: 'logoOffsetX', label: 'Logo position (left/right)', min: -40, max: 40, step: 0.5, unit: 'mm', dir: 'x' },
+    { key: 'logoOffsetY', label: 'Logo position (fwd/back)', min: -40, max: 40, step: 0.5, unit: 'mm', dir: 'y' },
     { key: 'logoRotation', label: 'Logo rotation', min: -180, max: 180, step: 1, unit: '°' },
   ],
 };
@@ -2719,7 +2740,16 @@ function updateUndoRedoButtons() {
 // callbacks instead of assuming a plain params[key] so both callers can
 // share it (a switch position lives at params.switches[i].x, not a
 // top-level params key).
-function createSliderRow({ label, min, max, step, unit, bold, disabled, getValue, setValue }) {
+// `direction` is purely cosmetic -- 'x' draws left/right chevrons flanking
+// the track, 'y' draws up/down ones, so a position slider hints which way
+// dragging it actually moves things (left/right vs. front/back) without
+// changing the underlying control at all: still one native range input,
+// same drag-to-commit/click-to-type-exact-value/undo behavior as every
+// other slider. The icons sit INSIDE the same flex row as the input
+// itself (see .slider-track below), not stacked above/below it, so a
+// directional slider takes up exactly the same row height as a plain one
+// -- nothing shifts position when a row happens to have arrows.
+function createSliderRow({ label, min, max, step, unit, bold, disabled, direction, getValue, setValue }) {
   const row = document.createElement('div');
   row.className = 'slider-row';
 
@@ -2814,7 +2844,30 @@ function createSliderRow({ label, min, max, step, unit, bold, disabled, getValue
   });
 
   row.appendChild(labelEl);
-  row.appendChild(input);
+  if (direction === 'x' || direction === 'y') {
+    const track = document.createElement('div');
+    track.className = 'slider-track';
+    // Left slot = the slider's min end, right slot = max end. For 'y'
+    // sliders the min end moves things toward/down (e.g. "-toward base")
+    // and the max end moves them away/up (e.g. "+up"), so the down
+    // chevron belongs on the left and the up chevron on the right --
+    // opposite of what you'd naively pair them as.
+    const chevrons = direction === 'y'
+      ? ['<polyline points="6 9 12 15 18 9"></polyline>', '<polyline points="18 15 12 9 6 15"></polyline>']
+      : ['<polyline points="15 18 9 12 15 6"></polyline>', '<polyline points="9 18 15 12 9 6"></polyline>'];
+    const makeDirIcon = (points) => {
+      const icon = document.createElement('span');
+      icon.className = 'dir-icon';
+      icon.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">${points}</svg>`;
+      return icon;
+    };
+    track.appendChild(makeDirIcon(chevrons[0]));
+    track.appendChild(input);
+    track.appendChild(makeDirIcon(chevrons[1]));
+    row.appendChild(track);
+  } else {
+    row.appendChild(input);
+  }
   return row;
 }
 
@@ -2826,7 +2879,8 @@ function buildSliders() {
       const disabled =
         (def.key === 'outlineCornerRadius' && params.outlineShape !== 'square' && params.outlineShape !== 'triangle') ||
         (def.key === 'logoMargin' && params.outlineShape !== 'imported') ||
-        (def.key === 'buttonCount' && isConnectedButtonsRestricted(params));
+        (def.key === 'buttonCount' && isConnectedButtonsRestricted(params)) ||
+        (groupId === 'group-text' && isTextRestricted(params));
       const row = createSliderRow({
         label: def.label,
         min: def.min,
@@ -2835,6 +2889,7 @@ function buildSliders() {
         unit: def.unit,
         bold: def.bold,
         disabled,
+        direction: def.dir,
         getValue: () => params[def.key],
         setValue: (v) => {
           params[def.key] = v;
@@ -2855,6 +2910,16 @@ function buildSliders() {
   }
   document.getElementById('connectedButtonsRestrictionNote').style.display =
     isConnectedButtonsRestricted(params) ? 'block' : 'none';
+
+  // Text's own non-slider inputs (the sliders above are already handled
+  // by the disabled flag in the loop) -- kept in sync here rather than
+  // via a separate function+call-sites, since buildSliders() already runs
+  // at every point params.outlineShape could have just changed.
+  const textRestricted = isTextRestricted(params);
+  document.getElementById('textContentInput').disabled = textRestricted;
+  document.getElementById('textFontSelect').disabled = textRestricted;
+  document.getElementById('textColorInput').disabled = textRestricted;
+  document.getElementById('textRestrictionNote').style.display = textRestricted ? 'block' : 'none';
 }
 
 // Switch list -- one entry per params.switches[i], each with its own
@@ -2867,14 +2932,21 @@ function buildSwitchList() {
     const entry = document.createElement('div');
     entry.className = 'switch-entry';
 
-    const header = document.createElement('div');
-    header.className = 'switch-entry-header';
-    const title = document.createElement('span');
-    title.className = 'switch-entry-title';
-    title.textContent = `Switch ${i + 1}`;
-    header.appendChild(title);
-
+    // "Switch N" title + remove button are only meaningful once there's
+    // more than one to tell apart -- the common case (add-switch controls
+    // are hidden, see the Internal Switches section) is always exactly
+    // one, so the whole header is skipped rather than showing a pointless
+    // "Switch 1" label. A loaded project file with several switches (the
+    // one way to still have more than one) still gets numbered headers
+    // and remove buttons for each.
     if (params.switches.length > 1) {
+      const header = document.createElement('div');
+      header.className = 'switch-entry-header';
+      const title = document.createElement('span');
+      title.className = 'switch-entry-title';
+      title.textContent = `Switch ${i + 1}`;
+      header.appendChild(title);
+
       const removeBtn = document.createElement('button');
       removeBtn.type = 'button';
       removeBtn.className = 'switch-remove-btn';
@@ -2889,18 +2961,20 @@ function buildSwitchList() {
         rebuild();
       });
       header.appendChild(removeBtn);
+      entry.appendChild(header);
     }
-    entry.appendChild(header);
 
     entry.appendChild(createSliderRow({
       label: 'Position (left/right)',
       min: -45, max: 45, step: 0.1, unit: 'mm',
+      direction: 'x',
       getValue: () => params.switches[i].x,
       setValue: (v) => { params.switches = params.switches.map((s, idx) => idx === i ? { ...s, x: v } : s); },
     }));
     entry.appendChild(createSliderRow({
       label: 'Position (fwd/back, +up/-toward base)',
       min: -45, max: 45, step: 0.1, unit: 'mm',
+      direction: 'y',
       getValue: () => params.switches[i].y,
       setValue: (v) => { params.switches = params.switches.map((s, idx) => idx === i ? { ...s, y: v } : s); },
     }));
@@ -3295,6 +3369,13 @@ document.getElementById('switchLabelsOffBtn').addEventListener('click', () => se
 document.getElementById('resetBtn').addEventListener('click', () => {
   const before = snapshotState();
   params = { ...DEFAULTS };
+  // Reset clears any imported logo too, not just the sliders -- otherwise
+  // "Reset" wouldn't actually get back to a truly blank slate. Still one
+  // undo step: importedLogo is already part of snapshotState()/
+  // applySnapshot(), so this is fully covered by the commitHistory() below.
+  importedLogo = null;
+  document.getElementById('logoFileInput').value = '';
+  renderLogoStatus();
   shapeSelectEl.value = params.outlineShape;
   textContentEl.value = params.textContent;
   textColorInputEl.value = params.textColor;
@@ -3375,6 +3456,26 @@ function wireInfoDialog(linkId, dialogId, closeBtnId) {
 }
 wireInfoDialog('disclaimerLink', 'disclaimerDialog', 'disclaimerCloseBtn');
 wireInfoDialog('changelogLink', 'changelogDialog', 'changelogCloseBtn');
+wireInfoDialog('bugReportLink', 'bugReportDialog', 'bugReportCloseBtn');
+
+// Pre-fill the bug report mailto link with a subject and a body template
+// that already has the visitor's browser info dropped in, so reporting a
+// bug doesn't require typing that out by hand -- just describe what
+// happened and hit send. Built once at load time; the "detected browser"
+// value in the body is whatever navigator.userAgent says, which is
+// enough for basic triage even though it's not a friendly parsed string.
+(() => {
+  const bugReportBody =
+    'What happened:\n\n\n' +
+    'Steps to reproduce:\n\n\n' +
+    '(Screenshots welcome -- just attach them here)\n\n' +
+    '---\n' +
+    'Browser: ' + navigator.userAgent;
+  document.getElementById('bugReportEmailLink').href =
+    'mailto:info@bashcreates.ca' +
+    '?subject=' + encodeURIComponent('Clicker Generator Bug Report') +
+    '&body=' + encodeURIComponent(bugReportBody);
+})();
 
 // ---------------------------------------------------------------------
 // Autosave -- separate from the explicit Save Project / Load Project

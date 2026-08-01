@@ -317,6 +317,28 @@ details summary {
   accent-color: var(--accent);
 }
 
+/* Directional sliders (see the `direction` param on createSliderRow()) --
+   the chevron icons sit in the SAME flex row as the track, vertically
+   centered against it, so adding them never changes the row's height or
+   pushes anything below it down. */
+.slider-track {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.slider-track input[type="range"] {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+
+.dir-icon {
+  flex: none;
+  display: flex;
+  color: var(--text);
+}
+
 .slider-row.is-disabled {
   opacity: 0.4;
 }
@@ -326,9 +348,6 @@ details summary {
 }
 
 .switch-entry {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 10px 2px;
   margin-bottom: 8px;
 }
 
@@ -551,6 +570,13 @@ textarea {
   resize: vertical;
 }
 
+select:disabled,
+textarea:disabled,
+input[type="color"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .buttons {
   display: flex;
   gap: 8px;
@@ -694,6 +720,15 @@ button#resetBtn,
   font-size: 12px;
   line-height: 1.6;
   color: var(--muted);
+}
+
+.info-dialog-body a {
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.info-dialog-body a:hover {
+  color: var(--text);
 }
 
 .info-dialog-body h3 {

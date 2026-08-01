@@ -12,6 +12,22 @@ All notable changes to the Clicker Generator are listed here, most recent first.
 
 ## 2026-08-01
 
+- Swapped the order of the Buy Me A Coffee and Boost on MakerWorld links so Buy Me A Coffee is on top.
+- Moved the corner radius slider out of "Overall size" to live right under the shape picker instead -- it's a property of the shape (square/triangle only), not the size, and stays just as visible rather than getting buried in Advanced Settings.
+- Reset now also clears an imported logo, not just the sliders -- previously it left the logo in place, which meant "Reset" didn't actually get back to a blank slate. Still a single undo step.
+- Removed the pointless "Switch 1" label in Switch Position -- it only shows a numbered header (with a remove button) when there's actually more than one switch to tell apart, e.g. after loading an older project file.
+- Fixed the up/down chevrons on front/back position sliders being swapped (down was showing on the slider's "up" end and vice versa).
+- Made the directional slider chevrons bolder and easier to see (full brightness instead of dimmed, thicker stroke, slightly larger) -- same row-height-safe layout as before.
+- Added small left/right or up/down chevron icons flanking every directional position slider (logo, text, switch, keychain loop offset) so it's clearer which way dragging actually moves things -- purely cosmetic, still the same slider underneath, and the icons sit inline with the track so row heights (and everything below them) don't shift.
+- Fixed the reference switch model disappearing in Assembled view -- it now shows (or hides) purely based on its own Show/Hide toggle, in both Assembled and Exploded view.
+- Restyled links inside dialogs (like the bug report email address) to match the muted/underline style used everywhere else on the site instead of the browser's default bold blue.
+- Added a "Report a Bug" link next to Disclaimer/Changelog that opens a dialog pointing to info@bashcreates.ca -- the email address is a mailto link pre-filled with a subject, a report template, and the visitor's browser info, so bug reports show up with useful debugging context already attached.
+- Disabled the Text section whenever the outline shape itself is the imported logo (sample or real upload) -- a logo's own irregular silhouette doesn't leave predictable room for centered text, so the field, font, color, and position sliders all grey out with a short note, and any leftover text is skipped in the actual geometry too.
+- Renamed "Internal Switches" to "Switch Position" and trimmed it down further: hid the viewport switch-labels toggle and the red restriction warning (neither matters once you can't add more than one switch from the UI), and removed the bordered box around the position sliders so they sit flat instead of looking like a drawer nested inside a drawer.
+- Simplified "Internal Switches" to just switch positioning -- the "+ Add switch" / "Auto Space Switches" controls are hidden (multi-switch still works underneath; a saved project with several switches loads and renders fine), but the position sliders stay visible since off-center placement is still a normal thing to want.
+- Shortened the red restriction warnings (Connected Buttons disabled for logos, Internal Switches capped at 1) to a single quick line each instead of a paragraph.
+- Moved "Internal Switches" into Advanced Settings -- most buttons only need one switch, so this keeps the main flow uncluttered while still supporting multiple switches per button for oversized/panel-style buttons.
+- Added a Changelog dialog and a separate Disclaimer dialog, each opened via small links at the bottom of the sidebar.
 - Added a slight 45° chamfer to the top outer edge of both the base and top pieces (shape-agnostic, works on every outline including star/heart/imported logos).
 - Added a Keychain Loop option: a thick, durable loop generated at the far end of the base, with sliders for outer diameter, hole diameter, thickness, and left/right offset; top edge of the loop is rounded.
 - Connected Buttons now automatically caps Internal Switches at 1, preventing duplicate switch instances and reference numbers when multiple buttons are connected.

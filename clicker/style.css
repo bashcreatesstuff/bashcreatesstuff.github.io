@@ -194,11 +194,26 @@ details summary {
 }
 
 /* Nested drawers inside "Advanced Settings" -- tighten up their own
-   border/margin so they read as children of the drawer instead of full
-   siblings of it. Heading color intentionally left at the default so it
-   matches every other section heading. */
+   margin so they read as children of the drawer instead of full siblings
+   of it. Visual distinction (so it's obvious which drawer is nested
+   inside which when both are open) comes from the general `details
+   details` rule below instead of anything specific to Advanced Settings. */
 .advanced-drawer details {
   margin: 10px 0 0;
+}
+
+/* Any drawer nested inside another drawer (Advanced Settings' children,
+   Logo import's "More info", etc.) -- a recessed dark-input-style
+   background instead of the plain bordered box top-level drawers use, so
+   an open drawer-within-a-drawer doesn't look identical to the drawer
+   containing it and it's clear at a glance which one to close. Summary
+   text itself is left at the default `details summary` styling (same
+   size/weight/color as a top-level drawer's title) -- only the box around
+   it changes. */
+details details {
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 4px 10px 10px;
 }
 
 .dropzone {

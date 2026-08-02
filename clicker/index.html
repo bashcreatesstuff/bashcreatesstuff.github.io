@@ -68,7 +68,7 @@
             the shape library instead if you'd rather the whole button's
             outline hug the logo's own silhouette. SVG gives exact
             vector results. PNG works too (traced + color quantized
-            in-browser) but quality depends on the source image -- flat
+            in-browser) but quality depends on the source image - flat
             colors and clean edges trace best.
           </p>
         </details>
@@ -128,7 +128,7 @@
           <input type="color" id="topColorInput" value="#1185fe">
         </label>
       </div>
-      <p class="hint" style="margin-top: -6px;">For reference purposes only -- actual color depends on the filament used when printing.</p>
+      <p class="hint" style="margin-top: -6px;">For reference purposes only - actual color depends on the filament used when printing.</p>
 
       <div class="row">
         <span class="select-label">Reference switch</span>
@@ -174,11 +174,11 @@
           Disabled for imported logo shapes.
         </p>
         <p class="hint">
-          Uses the Text &amp; logo style toggle above -- Inlay keeps the
+          Uses the Text &amp; logo style toggle above - Inlay keeps the
           whole face flush for a clean face-down print with no supports,
           Emboss raises the letters proud of the surface for a face-up
           print instead. The font choices here favor thick, even strokes
-          -- serif and script fonts tend to fill in or break off at small
+          - serif and script fonts tend to fill in or break off at small
           sizes, so they're left out.
         </p>
       </details>
@@ -189,7 +189,7 @@
           Print multiple of this same button connected together as one
           base, each with its own switch. Each button keeps its own
           separate recess, so a normal single top still docks into any
-          one of them -- tops are always designed and exported one at a
+          one of them - tops are always designed and exported one at a
           time, with their own text/logo, not connected to each other.
         </p>
         <div id="group-buttons"></div>
@@ -203,7 +203,7 @@
         <p class="hint" style="margin-top: 0;">
           Adds a loop for a keyring, fused to the far end of the button
           row (or the button itself if there's only one). It doesn't need
-          to be as thick as the whole base -- just thick enough to hold up.
+          to be as thick as the whole base - just thick enough to hold up.
         </p>
         <div class="row">
           <span class="select-label">Keychain loop</span>
@@ -221,7 +221,7 @@
         <details>
           <summary>Switch Position</summary>
           <p class="hint" style="margin-top: 0;">
-            Fine-tune where the switch cavity sits within this button --
+            Fine-tune where the switch cavity sits with its button -
             most designs keep it centered.
           </p>
           <!-- Viewport switch-number labels only matter once there's more
@@ -365,7 +365,7 @@
       </p>
       <p>
         It helps to mention your browser and what you were doing when it
-        happened -- clicking the address above opens your email client
+        happened - clicking the address above opens your email client
         with that browser info already filled in for you. Screenshots are
         very welcome too, just attach them to the email.
       </p>
@@ -403,23 +403,26 @@
     <div class="info-dialog-body">
       <h3>2026-08-01</h3>
       <ul>
+        <li>Fixed the Switch Position hint text and swapped every double dash for a single dash in visible text sitewide.</li>
+        <li>Gave nested drawers a visually distinct recessed background instead of looking identical to the drawer containing them. Title text still matches every other drawer's styling.</li>
+        <li>Changed three default slider values: Retention lip inset 0.82mm &rarr; 0.72mm, Outer wall thickness (bottom) and Cap wall thickness (top) both 2.6mm/1.4mm &rarr; 1mm. Only affects new/reset designs.</li>
         <li>Replaced the Basic Shapes dropdown and separate sample gallery with one unified Shape library grid (circle/square/triangle/samples/saved logos, "Imported" tile now has an upload icon), and fixed picking a sample silently overwriting an uploaded overlay logo.</li>
-        <li>Hid the "Switch Spacing" readout under Switch Position -- no longer relevant now that the UI can't create more than one switch.</li>
+        <li>Hid the "Switch Spacing" readout under Switch Position - no longer relevant now that the UI can't create more than one switch.</li>
         <li>Fixed the "Imported" tile in the Shape library not showing up right after uploading a logo. The tile is now always visible (greyed out until a logo's loaded, back to greyed out after Reset) instead of appearing/disappearing.</li>
         <li>Swapped the order of the Buy Me A Coffee and Boost on MakerWorld links so Buy Me A Coffee is on top.</li>
-        <li>Moved the corner radius slider out of "Overall size" to live right under the shape picker instead -- it's a property of the shape (square/triangle only), not the size, and stays just as visible rather than getting buried in Advanced Settings.</li>
-        <li>Removed the pointless "Switch 1" label in Switch Position -- it only shows a numbered header (with a remove button) when there's actually more than one switch to tell apart, e.g. after loading an older project file.</li>
+        <li>Moved the corner radius slider out of "Overall size" to live right under the shape picker instead - it's a property of the shape (square/triangle only), not the size, and stays just as visible rather than getting buried in Advanced Settings.</li>
+        <li>Removed the pointless "Switch 1" label in Switch Position - it only shows a numbered header (with a remove button) when there's actually more than one switch to tell apart, e.g. after loading an older project file.</li>
         <li>Fixed the up/down chevrons on front/back position sliders being swapped (down was showing on the slider's "up" end and vice versa).</li>
-        <li>Made the directional slider chevrons bolder and easier to see (full brightness instead of dimmed, thicker stroke, slightly larger) -- same row-height-safe layout as before.</li>
-        <li>Added small left/right or up/down chevron icons flanking every directional position slider (logo, text, switch, keychain loop offset) so it's clearer which way dragging actually moves things -- purely cosmetic, still the same slider underneath, and the icons sit inline with the track so row heights (and everything below them) don't shift.</li>
-        <li>Fixed the reference switch model disappearing in Assembled view -- it now shows (or hides) purely based on its own Show/Hide toggle, in both Assembled and Exploded view.</li>
+        <li>Made the directional slider chevrons bolder and easier to see (full brightness instead of dimmed, thicker stroke, slightly larger) - same row-height-safe layout as before.</li>
+        <li>Added small left/right or up/down chevron icons flanking every directional position slider (logo, text, switch, keychain loop offset) so it's clearer which way dragging actually moves things - purely cosmetic, still the same slider underneath, and the icons sit inline with the track so row heights (and everything below them) don't shift.</li>
+        <li>Fixed the reference switch model disappearing in Assembled view - it now shows (or hides) purely based on its own Show/Hide toggle, in both Assembled and Exploded view.</li>
         <li>Restyled links inside dialogs (like the bug report email address) to match the muted/underline style used everywhere else on the site instead of the browser's default bold blue.</li>
-        <li>Added a "Report a Bug" link next to Disclaimer/Changelog that opens a dialog pointing to info@bashcreates.ca -- the email address is a mailto link pre-filled with a subject, a report template, and the visitor's browser info, so bug reports show up with useful debugging context already attached.</li>
-        <li>Disabled the Text section whenever the outline shape itself is the imported logo (sample or real upload) -- a logo's own irregular silhouette doesn't leave predictable room for centered text, so the field, font, color, and position sliders all grey out with a short note, and any leftover text is skipped in the actual geometry too.</li>
+        <li>Added a "Report a Bug" link next to Disclaimer/Changelog that opens a dialog pointing to info@bashcreates.ca - the email address is a mailto link pre-filled with a subject, a report template, and the visitor's browser info, so bug reports show up with useful debugging context already attached.</li>
+        <li>Disabled the Text section whenever the outline shape itself is the imported logo (sample or real upload) - a logo's own irregular silhouette doesn't leave predictable room for centered text, so the field, font, color, and position sliders all grey out with a short note, and any leftover text is skipped in the actual geometry too.</li>
         <li>Renamed "Internal Switches" to "Switch Position" and trimmed it down further: hid the viewport switch-labels toggle and the red restriction warning (neither matters once you can't add more than one switch from the UI), and removed the bordered box around the position sliders so they sit flat instead of looking like a drawer nested inside a drawer.</li>
-        <li>Simplified "Internal Switches" to just switch positioning -- the "+ Add switch" / "Auto Space Switches" controls are hidden (multi-switch still works underneath; a saved project with several switches loads and renders fine), but the position sliders stay visible since off-center placement is still a normal thing to want.</li>
+        <li>Simplified "Internal Switches" to just switch positioning - the "+ Add switch" / "Auto Space Switches" controls are hidden (multi-switch still works underneath; a saved project with several switches loads and renders fine), but the position sliders stay visible since off-center placement is still a normal thing to want.</li>
         <li>Shortened the red restriction warnings (Connected Buttons disabled for logos, Internal Switches capped at 1) to a single quick line each instead of a paragraph.</li>
-        <li>Moved "Internal Switches" into Advanced Settings -- most buttons only need one switch, so this keeps the main flow uncluttered while still supporting multiple switches per button for oversized/panel-style buttons.</li>
+        <li>Moved "Internal Switches" into Advanced Settings - most buttons only need one switch, so this keeps the main flow uncluttered while still supporting multiple switches per button for oversized/panel-style buttons.</li>
         <li>Added a Changelog dialog and a separate Disclaimer dialog, each opened via small links at the bottom of the sidebar.</li>
         <li>Added a slight 45&deg; chamfer to the top outer edge of both the base and top pieces (shape-agnostic, works on every outline including star/heart/imported logos).</li>
         <li>Added a Keychain Loop option: a thick, durable loop generated at the far end of the base, with sliders for outer diameter, hole diameter, thickness, and left/right offset; top edge of the loop is rounded.</li>

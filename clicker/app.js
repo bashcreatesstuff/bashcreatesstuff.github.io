@@ -129,14 +129,14 @@ const DEFAULTS = {
   // below. These three describe the narrower "retention lip" step near
   // the top of the pocket that overhangs the wider cavity and physically
   // holds the switch in place.
-  retentionLipInset: 0.82, // how much narrower the lip is than the main
+  retentionLipInset: 0.72, // how much narrower the lip is than the main
                            // cavity, per side
   retentionLipHeight: 1.4, // height of the lip band
   chamferHeight: 0.5,      // height of the straight taper between the main
                            // cavity and the lip
 
   bottomHeight: 17.2,
-  bottomWall: 2.6,         // outer wall thickness above the switch pocket
+  bottomWall: 1.0,         // outer wall thickness above the switch pocket
   recessDepth: 8.2,        // depth of socket that receives the top's skirt
   fitClearance: 0.4,       // radial gap, top skirt vs bottom recess (TUNE PER PRINTER)
   restProtrusion: 6.0,     // how far the button stands proud of the case at
@@ -151,7 +151,7 @@ const DEFAULTS = {
   topHeight: 7.4,
   capThickness: 1.8,
   skirtDepth: 5.2,
-  skirtWall: 1.4,
+  skirtWall: 1.0,
   postOuterR: 2.8,
   postFilletRadius: 1.8,   // rounds the corner where the post exits the cap's
                            // underside into the open cavity (0 = sharp corner)
@@ -3207,7 +3207,7 @@ function renderLogoStatus() {
   // Keep this line short -- full details (filename, color count) are still
   // available on hover via the title attribute for anyone who wants them.
   logoStatusEl.textContent = 'Loaded image';
-  logoStatusEl.title = `${importedLogo.sourceName} -- ${importedLogo.colorLayers.length} color layer(s)`;
+  logoStatusEl.title = `${importedLogo.sourceName} - ${importedLogo.colorLayers.length} color layer(s)`;
   logoStatusEl.className = 'clearance ok';
 }
 
@@ -3656,7 +3656,7 @@ wireInfoDialog('bugReportLink', 'bugReportDialog', 'bugReportCloseBtn');
   const bugReportBody =
     'What happened:\n\n\n' +
     'Steps to reproduce:\n\n\n' +
-    '(Screenshots welcome -- just attach them here)\n\n' +
+    '(Screenshots welcome - just attach them here)\n\n' +
     '---\n' +
     'Browser: ' + navigator.userAgent;
   document.getElementById('bugReportEmailLink').href =

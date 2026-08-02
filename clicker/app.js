@@ -29,7 +29,7 @@ const DEFAULTS = {
                            // named sample (see SAMPLE_LOGOS) | 'custom:<id>'
                            // (a saved sample, see customSamples) | 'imported'
                            // (the current uploaded/traced logo's own silhouette)
-  outlineDiameter: 55.5,   // diameter of the circle THAT THE SHAPE IS INSCRIBED IN --
+  outlineDiameter: 35,     // diameter of the circle THAT THE SHAPE IS INSCRIBED IN --
                            // keeps "size" meaning consistent across shapes so every
                            // downstream wall/pocket calculation doesn't need to care
                            // which shape is active

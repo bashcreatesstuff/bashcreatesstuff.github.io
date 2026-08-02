@@ -10,6 +10,10 @@ All notable changes to the Clicker Generator are listed here, most recent first.
   combined into fewer, summarized entries rather than one line per edit.
 -->
 
+## 2026-08-02
+
+- Changed the default Overall diameter from 55.5mm to 35mm.
+
 ## 2026-08-01
 
 - Fixed the Switch Position hint text and swapped every double dash ("--") in visible text sitewide (hints, dialogs, tooltips) for a single dash, for consistency.

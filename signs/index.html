@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sign Generator</title>
+<link rel="stylesheet" href="style.css" />
+
+<!--
+  Custom font(s) used by the Font dropdown that aren't pre-installed on
+  most systems -- unlike every other font option (system stacks, no fetch
+  needed), these require the browser to load the actual font file before
+  canvas text tracing can use it. See loadCustomFonts() in app.js, which
+  waits for all of them (both kinds below) to finish loading before the
+  first render.
+
+  Two ways a custom font gets here:
+  - Self-hosted: a real font FILE (like Bubblegum.ttf) with its own
+    @font-face rule in style.css. Used when Kyle supplies the actual file.
+  - Google Fonts CDN: loaded via the <link> below, same CDN-dependency
+    model this project already has for Three.js/Manifold (see the import
+    map further down) -- needs internet the first time, cached after.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Poppins:wght@700&family=Bebas+Neue&family=Anton&family=Fredoka:wght@600&family=Baloo+2:wght@700&family=Righteous&family=Archivo+Black&family=Luckiest+Guy&family=Bungee&display=swap" rel="stylesheet">
+
+<!--
+  Everything here runs client-side, in your browser -- no build step. The
+  two heavy libraries (Three.js for the 3D viewport, Manifold for the
+  actual CAD geometry) are loaded from jsDelivr's CDN via this import map,
+  so this needs an internet connection the first time it's opened
+  (browsers cache the files after that). It also needs to be served over
+  http:// (see README/instructions) rather than opened directly as a
+  file:// URL, since module scripts can't load relative files that way in
+  most browsers.
+-->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/",
+    "manifold-3d": "https://cdn.jsdelivr.net/npm/manifold-3d@3.5.1/manifold.js"
+  }
+}
+</script>
+</head>
+<body>
+  <div id="app">
+    <div id="leftPanel">
+      <h1>Sign Generator</h1>
+      <p class="tagline">Design 3D-printable signs: die-cut text or a shaped plaque with text on it.</p>
+      <p class="status" id="status">Loading geometry engine&hellip;</p>
+
+      <div class="row">
+        <span class="select-label">Mode</span>
+        <div class="pill-toggle" id="modeToggle">
+          <button type="button" id="dieCutModeBtn" class="active">Text + Outline</button>
+          <button type="button" id="shapeModeBtn">Text + Shape</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <span class="select-label">Print style</span>
+        <div class="pill-toggle" id="engraveStyleToggle">
+          <button type="button" id="engraveEmbossBtn" class="active">Emboss (raised)</button>
+          <button type="button" id="engraveInlayBtn">Inlay (flush)</button>
+        </div>
+      </div>
+      <p class="hint" style="margin-top: -6px;">
+        Inlay prints face-down (text touching the plate) with no supports.
+      </p>
+
+      <!-- ================= Die-cut text mode ================= -->
+      <div id="dieCutPanel">
+        <details open>
+          <summary>Text</summary>
+          <p class="hint" style="margin-top: 0;">
+            Each line has its own size, font, color, position, and rotation.
+            Overlapping outlines fuse together automatically (see Outline
+            on the right).
+          </p>
+          <div class="row">
+            <span class="select-label">Align lines</span>
+            <div class="pill-toggle" id="dieCutLineAlignToggle">
+              <button type="button" id="dieCutLineAlignManualBtn" class="active">Manual</button>
+              <button type="button" id="dieCutLineAlignLeftBtn">Left</button>
+              <button type="button" id="dieCutLineAlignCenterBtn">Center</button>
+              <button type="button" id="dieCutLineAlignRightBtn">Right</button>
+            </div>
+          </div>
+          <p class="hint" style="margin-top: -6px;">
+            Left/Center/Right lines up every line below, overriding its own
+            Position slider. Manual leaves them as-is.
+          </p>
+          <div id="dieCutTextElementList"></div>
+          <div class="row buttons">
+            <button type="button" id="addDieCutTextElementBtn" class="secondary-btn">+ Add line</button>
+          </div>
+        </details>
+      </div>
+
+      <!-- ================= Shape + text mode ================= -->
+      <div id="shapePanel" style="display: none;">
+        <span class="select-label">Shape</span>
+        <div class="sample-gallery" id="shapeLibrary"></div>
+
+        <details open>
+          <summary>Shape size</summary>
+          <div id="group-shapeSize"></div>
+          <div class="row color-row">
+            <label class="color-swatch-label">
+              <span>Backing color</span>
+              <input type="color" id="shapeColorInput" value="#7c6fe0">
+            </label>
+          </div>
+        </details>
+
+        <details open>
+          <summary>Text</summary>
+          <p class="hint" style="margin-top: 0;">
+            Each line is positioned, sized, and colored independently, and
+            clipped so it can't overhang the shape's edge.
+          </p>
+          <div class="row">
+            <span class="select-label">Align lines</span>
+            <div class="pill-toggle" id="shapeLineAlignToggle">
+              <button type="button" id="shapeLineAlignManualBtn" class="active">Manual</button>
+              <button type="button" id="shapeLineAlignLeftBtn">Left</button>
+              <button type="button" id="shapeLineAlignCenterBtn">Center</button>
+              <button type="button" id="shapeLineAlignRightBtn">Right</button>
+            </div>
+          </div>
+          <p class="hint" style="margin-top: -6px;">
+            Left/Center/Right lines up every line below, overriding its own
+            Position slider. Manual leaves them as-is.
+          </p>
+          <div id="textElementList"></div>
+          <div class="row buttons">
+            <button type="button" id="addTextElementBtn" class="secondary-btn">+ Add text</button>
+          </div>
+        </details>
+      </div>
+
+    </div>
+
+    <button id="leftPanelToggle" class="panel-toggle" type="button" title="Collapse panel" aria-label="Collapse left panel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+    </button>
+
+    <div id="viewport">
+      <p class="viewport-hint">Hold left mouse button to rotate, right mouse button to pan, scroll wheel in/out to zoom</p>
+      <p class="viewport-size-readout" id="sizeReadout">--</p>
+    </div>
+
+    <button id="rightPanelToggle" class="panel-toggle" type="button" title="Collapse panel" aria-label="Collapse right panel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </button>
+
+    <div id="panel">
+      <div id="dieCutOutlinePanel">
+        <details open>
+          <summary>Outline</summary>
+          <p class="hint" style="margin-top: 0;">
+            Grows a backing plate around the letters, sized per-line by
+            each "Outline thickness" slider under Text. Toggles the whole
+            backing on/off.
+          </p>
+          <div class="row">
+            <span class="select-label">Outline</span>
+            <div class="pill-toggle" id="dieCutOutlineToggle">
+              <button type="button" id="dieCutOutlineOnBtn" class="active">On</button>
+              <button type="button" id="dieCutOutlineOffBtn">Off</button>
+            </div>
+          </div>
+          <div class="row color-row">
+            <label class="color-swatch-label">
+              <span>Outline color</span>
+              <input type="color" id="dieCutOutlineColorInput" value="#7c6fe0">
+            </label>
+          </div>
+        </details>
+
+        <details open>
+          <summary>Thickness</summary>
+          <p class="hint" style="margin-top: 0;">
+            The sign's overall thickness (not any one line's own Text
+            height).
+          </p>
+          <div id="group-dieCutOutline"></div>
+        </details>
+
+        <details open>
+          <summary>Mounting Holes</summary>
+          <p class="hint" style="margin-top: 0;">
+            Adds a loop with a hole for hanging, fused to the top of the
+            outline backing (needs Outline on). Left/right position is
+            mirrored for Corners.
+          </p>
+          <div class="row">
+            <span class="select-label">Holes</span>
+            <div class="pill-toggle" id="dieCutMountingHolesToggle">
+              <button type="button" id="dieCutMountingHolesNoneBtn" class="active">None</button>
+              <button type="button" id="dieCutMountingHolesCornersBtn">Corners</button>
+              <button type="button" id="dieCutMountingHolesCenterBtn">Center</button>
+            </div>
+          </div>
+          <div id="group-dieCutMountingHoles"></div>
+        </details>
+        <hr class="panel-divider" />
+      </div>
+
+      <div id="shapeMountingHolesPanel" style="display: none;">
+        <details open>
+          <summary>Mounting Holes</summary>
+          <p class="hint" style="margin-top: 0;">
+            Adds a loop with a hole for hanging, fused to the top of the
+            backing. Left/right position is mirrored for Corners.
+          </p>
+          <div class="row">
+            <span class="select-label">Holes</span>
+            <div class="pill-toggle" id="shapeMountingHolesToggle">
+              <button type="button" id="shapeMountingHolesNoneBtn" class="active">None</button>
+              <button type="button" id="shapeMountingHolesCornersBtn">Corners</button>
+              <button type="button" id="shapeMountingHolesCenterBtn">Center</button>
+            </div>
+          </div>
+          <div id="group-shapeMountingHoles"></div>
+        </details>
+        <hr class="panel-divider" />
+      </div>
+
+      <div class="row">
+        <span class="select-label">Export format</span>
+        <div class="pill-toggle" id="exportFormatToggle">
+          <button type="button" id="exportFormat3mfBtn" class="active">3MF</button>
+          <button type="button" id="exportFormatStlBtn">STL</button>
+        </div>
+      </div>
+      <p class="hint" style="margin-top: -6px;">
+        3MF keeps colors as separate paintable objects in Bambu Studio; STL merges them into one solid color.
+      </p>
+      <div class="row buttons">
+        <button id="exportBtn">Download</button>
+      </div>
+      <div class="row buttons">
+        <button id="saveProjectBtn" class="secondary-btn">Save Project</button>
+        <button id="loadProjectBtn" class="secondary-btn">Load Project</button>
+        <input type="file" id="loadProjectInput" accept="application/json,.json" style="display:none" />
+      </div>
+      <div class="row buttons icon-buttons">
+        <button id="undoBtn" class="icon-btn secondary-btn" disabled title="Undo">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
+          <span>Undo</span>
+        </button>
+        <button id="redoBtn" class="icon-btn secondary-btn" disabled title="Redo">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"></polyline><path d="M4 20v-7a4 4 0 0 1 4-4h12"></path></svg>
+          <span>Redo</span>
+        </button>
+        <button id="resetBtn" class="icon-btn secondary-btn" title="Reset to defaults">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+          <span>Reset</span>
+        </button>
+      </div>
+
+      <hr class="panel-divider" />
+
+      <a class="bmc-link" href="https://buymeacoffee.com/bashcreates" target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>
+        Buy Me A Coffee
+      </a>
+      <a class="boost-link" href="https://makerworld.com/en/@BashCreates/upload" target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+        Boost on MakerWorld
+      </a>
+      <p class="hint">
+        Free to use for personal or commercial projects, no attribution or
+        payment required. If you'd like to say thanks, a donation or Boost
+        is appreciated, but never required.
+      </p>
+
+      <p class="hint">
+        <button type="button" class="link-btn" id="disclaimerLink">Disclaimer</button>
+        &nbsp;&middot;&nbsp;
+        <button type="button" class="link-btn" id="licenseLink">License</button>
+        &nbsp;&middot;&nbsp;
+        <button type="button" class="link-btn" id="changelogLink">Changelog</button>
+        &nbsp;&middot;&nbsp;
+        <button type="button" class="link-btn" id="bugReportLink">
+          Report a Bug
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 2 1.88 1.88"></path><path d="M14.12 3.88 16 2"></path><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"></path><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"></path><path d="M12 20v-9"></path><path d="M6.53 9C4.6 8.8 3 7.1 3 5"></path><path d="M6 13H2"></path><path d="M3 21c0-2.1 1.7-3.9 3.8-4"></path><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"></path><path d="M22 13h-4"></path><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"></path></svg>
+        </button>
+      </p>
+    </div>
+  </div>
+
+  <dialog id="disclaimerDialog" class="info-dialog">
+    <div class="info-dialog-header">
+      <h2>Disclaimer</h2>
+      <button type="button" id="disclaimerCloseBtn" class="dialog-close-btn" title="Close" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="info-dialog-body">
+      <p>
+        Provided as-is, no warranty. Generated parts aren't guaranteed
+        safe, accurate, or fit for any purpose -- check clearances and
+        tolerances for your own printer before printing.
+      </p>
+      <p>
+        Bundled fonts and libraries carry their own licenses -- see License.
+      </p>
+    </div>
+  </dialog>
+
+  <dialog id="licenseDialog" class="info-dialog">
+    <div class="info-dialog-header">
+      <h2>License</h2>
+      <button type="button" id="licenseCloseBtn" class="dialog-close-btn" title="Close" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="info-dialog-body">
+      <h3>Bundled fonts</h3>
+      <p>
+        Bubble Gum is copyrighted 1994 by Thomas W. Ziller, distributed as shareware.
+      </p>
+      <p>
+        Montserrat, Poppins, Bebas Neue, Anton, Fredoka, Baloo 2,
+        Righteous, Archivo Black, Luckiest Guy, and Bungee are Google
+        Fonts, loaded from Google's CDN, each under the
+        <a href="https://openfontlicense.org/" target="_blank" rel="noopener noreferrer">SIL Open Font License</a>.
+      </p>
+      <h3>Third-party libraries</h3>
+      <p>
+        Built on open-source
+        <a href="https://threejs.org/" target="_blank" rel="noopener noreferrer">Three.js</a>
+        and
+        <a href="https://github.com/elalish/manifold" target="_blank" rel="noopener noreferrer">Manifold</a>,
+        loaded from jsDelivr's CDN, each under its own license.
+      </p>
+    </div>
+  </dialog>
+
+  <!-- Kept in sync with CHANGELOG.md by hand -- update both on every change. -->
+  <dialog id="changelogDialog" class="info-dialog">
+    <div class="info-dialog-header">
+      <h2>Changelog</h2>
+      <button type="button" id="changelogCloseBtn" class="dialog-close-btn" title="Close" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="info-dialog-body">
+      <h3>2026-08-02</h3>
+      <ul>
+        <li>Fixed die-cut Mounting Holes (Corners/Center) anchoring to the whole backing's bounding box instead of the top line's own -- dragging a lower line wider or further sideways than the top line could push the top line's loops off it entirely. Now anchored to whichever line is actually highest, so they stay on it regardless of what other lines are doing.</li>
+        <li>Added Mounting Holes (both modes): adds a small loop with a hole through it, fused to the top of the backing for hanging on a nail/screw -- same idea as Clicker Generator's keyring loop, not a hole cut into the backing itself. Choose None, Corners (one loop near each top corner of the backing's bounding box), or Center (one loop, centered, near the top edge), with adjustable loop outer diameter, hole diameter, how far in from the side edge each Corners loop sits, and fine left/right + up/down position sliders to nudge placement -- the left/right one is mirrored for Corners, so one slider spreads or pulls in both loops together instead of needing two. Die-cut mode's toggle is greyed out when Outline is off, since there's no backing to fuse it to.</li>
+        <li>Added 10 Google Fonts to the Font dropdown, picked for thick/even strokes that hold up when traced to a 3D-printable outline: Montserrat, Poppins, Bebas Neue, Anton, Fredoka, Baloo 2, Righteous, Archivo Black, Luckiest Guy, and Bungee. Loaded from Google's CDN (see License dialog).</li>
+        <li>Moved the Total/Backing thickness slider out of the Outline (die-cut backing) drawer into its own "Thickness" section on the right panel, since it's the sign's overall thickness, not an outline-specific setting.</li>
+        <li>Added a total size readout in the top-right of the viewport (Width x Depth x Height, mm), updating live as the design changes.</li>
+        <li>Restored the full "Free to use for personal or commercial projects..." wording for the hint text under the Buy Me A Coffee/Boost links (had been over-shortened); Disclaimer dialog left as its original warranty/license text.</li>
+        <li>Added a bug icon next to the "Report a Bug" link; changed the bug-report email from a personal address to info@bashcreates.com; added a note in the Report a Bug dialog inviting Google Fonts suggestions.</li>
+        <li>Fixed Position (left/right)/(fwd/back) sliders showing long floating-point decimals after dragging a line in the 3D viewport (e.g. "34.728193745mm") -- dragged values are now rounded to 0.1mm, both going forward and for values already carrying drift.</li>
+        <li>Moved the "Outline (die-cut backing)" section from the left panel to the right panel, above Export format -- still only shown in Die-cut Text mode.</li>
+        <li>Added Buy Me A Coffee and Boost on MakerWorld links to the right panel, matching the original Clicker Generator project.</li>
+        <li>Added "Align lines": one global Manual/Left/Center/Right toggle for each mode's whole text list, lining up every line to a shared edge (the widest line) and overriding each line's own Position slider while active. Useful for stacking lines of different sizes as separate objects.</li>
+        <li>Added Left/Center/Right line alignment buttons per text box, for when a single box has 2+ lines (typed with a line break) -- controls how those lines line up relative to each other, independent of the box's own overall position.</li>
+        <li>Added drag-to-move: click and drag any line of text directly in the 3D viewport to reposition it, staying in sync with the Position sliders. Orbiting is disabled during a drag and one undo step is recorded per drag.</li>
+        <li>Renamed the backing-height sliders (die-cut Outline height, Shape backing height) to say "Total thickness" in Inlay mode and "Backing thickness (text adds height on top)" in Emboss mode, since only Inlay's recess keeps the slider value as the true total height.</li>
+        <li>Added a per-line Character spacing slider (both modes).</li>
+        <li>In Inlay mode, each line's Text height slider is now greyed out (the recess is always cut as deep as it safely can be into the backing) and relabeled to say so; toggling Emboss/Inlay now refreshes both text lists live.</li>
+        <li>Reworded the Line spacing slider to "Line spacing (if this box has 2+ lines)" to clarify it only affects line breaks typed inside one text box, not separate lines added via "Add line."</li>
+        <li>Added Disclaimer, License, Changelog, and Report a Bug links/dialogs to the sidebar.</li>
+        <li>Fixed a bug where the Text lists (both modes) failed to render and the Add Line/Add Text buttons did nothing, caused by a stale variable reference in the shared list-building code.</li>
+        <li>Made each line in Die-cut mode responsible for its own outline thickness (margin) instead of one shared value for the whole design -- lines with different thicknesses still fuse together where they overlap.</li>
+        <li>Split Die-cut mode's single text block into independent per-line text elements (add/remove lines, each with its own font, size, depth, position, rotation, and color).</li>
+        <li>Added an Emboss/Inlay print-style toggle -- Inlay cuts text as a flush recess into the backing instead of raising it, for printing text-side-down with no supports.</li>
+        <li>Fixed the die-cut outline only showing up behind closed letter counters (like the hole in an "O") instead of growing around the whole word -- a loop-winding-direction bug in the outline generator.</li>
+        <li>Initial build: Die-cut Text mode (type text, optional connecting outline) and Shape + Text mode (pick a backing shape, add independently-placed text), 3MF/STL export for multi-color printing, undo/redo, save/load project, autosave. Ported from Clicker Generator's Manifold/Three.js plumbing, with all keychain-button-specific features removed.</li>
+      </ul>
+    </div>
+  </dialog>
+
+  <dialog id="bugReportDialog" class="info-dialog">
+    <div class="info-dialog-header">
+      <h2>Report a Bug</h2>
+      <button type="button" id="bugReportCloseBtn" class="dialog-close-btn" title="Close" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="info-dialog-body">
+      <p>
+        Please send bug reports to
+        <a href="mailto:info@bashcreates.com" id="bugReportEmailLink">info@bashcreates.com</a>.
+      </p>
+      <p>
+        Mention what you were doing when it happened -- clicking the
+        address above pre-fills your browser info. Screenshots welcome.
+      </p>
+      <p>
+        Got a Google Fonts suggestion? Let me know at the same address and
+        I'll consider adding it.
+      </p>
+    </div>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

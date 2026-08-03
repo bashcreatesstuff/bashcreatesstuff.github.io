@@ -175,7 +175,8 @@ html, body {
   margin: 0 0 14px;
 }
 
-.tagline a {
+.tagline a,
+.tagline a:visited {
   color: var(--muted);
   text-decoration: underline;
 }

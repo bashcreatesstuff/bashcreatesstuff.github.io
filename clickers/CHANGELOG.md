@@ -1,69 +1,31 @@
 # Changelog
 
-All notable changes to the Clicker Generator are listed here, most recent first.
-
-<!--
-  Maintenance note: update this file (and the matching entries in the
-  in-app Changelog dialog in index.html / clicker-generator-standalone.html)
-  whenever a change is made. One small, one-off change gets its own entry.
-  A batch of small/related changes made in the same sitting should be
-  combined into fewer, summarized entries rather than one line per edit.
--->
+Kept in sync with the in-app Changelog dialog (`index.html`) by hand --
+update both on every change or same-session batch of changes.
 
 ## 2026-08-02
 
-- Added a LICENSE file (MIT) and a License link/dialog next to Disclaimer/Changelog, crediting Claude as the primary author with Bash Creates supervising, matching the site's tagline.
-- Added a small bug icon next to the "Report a Bug" link.
-- Changed the default Overall diameter from 55.5mm to 35mm.
-
-## 2026-08-01
-
-- Fixed the Switch Position hint text and swapped every double dash ("--") in visible text sitewide (hints, dialogs, tooltips) for a single dash, for consistency.
-- Gave nested drawers (Advanced Settings' children, Logo import's "More info") a visually distinct recessed background instead of looking identical to the drawer containing them -- previously hard to tell which one to close when both were open. Title text itself still matches every other drawer's styling.
-- Changed three default slider values: Retention lip inset from 0.82mm to 0.72mm (looser switch snap-fit), and both Outer wall thickness (bottom piece) and Cap wall thickness (top piece) from 2.6mm/1.4mm down to 1mm each. Only affects new/reset designs -- doesn't touch anything already saved or loaded.
-- Replaced the Basic Shapes dropdown and the separate sample gallery with a single unified Shape library: circle, square, triangle, the 4 built-in named samples, an "Imported" tile (with an upload icon), and any logo you save via "+ Save as sample" all live together as one grid of tiles (saved samples kept in your browser, with a small × to remove one). This also fixed a real conflict the old setup had -- picking a sample used to silently overwrite whatever logo you'd uploaded for the inlay/emboss overlay, since both features shared the same internal slot. A real uploaded logo now overlays correctly no matter which shape tile is selected.
-- Hid the "Switch Spacing: Safe/Close/Too Thin" readout under Switch Position -- like the controls above it, it only ever mattered with more than one switch, which isn't reachable from the UI anymore.
-- Fixed the "Imported" tile in the Shape library never actually appearing when uploading a logo (it only showed up afterward if some unrelated action happened to refresh the library, e.g. undo/redo). The tile is now always present in the library instead of appearing/disappearing -- greyed out and unclickable until a logo's loaded, then usable, and back to greyed out after a Reset (Reset still clears the uploaded logo along with the sliders, same as before).
-- Swapped the order of the Buy Me A Coffee and Boost on MakerWorld links so Buy Me A Coffee is on top.
-- Moved the corner radius slider out of "Overall size" to live right under the shape picker instead -- it's a property of the shape (square/triangle only), not the size, and stays just as visible rather than getting buried in Advanced Settings.
-- Removed the pointless "Switch 1" label in Switch Position -- it only shows a numbered header (with a remove button) when there's actually more than one switch to tell apart, e.g. after loading an older project file.
-- Fixed the up/down chevrons on front/back position sliders being swapped (down was showing on the slider's "up" end and vice versa).
-- Made the directional slider chevrons bolder and easier to see (full brightness instead of dimmed, thicker stroke, slightly larger) -- same row-height-safe layout as before.
-- Added small left/right or up/down chevron icons flanking every directional position slider (logo, text, switch, keychain loop offset) so it's clearer which way dragging actually moves things -- purely cosmetic, still the same slider underneath, and the icons sit inline with the track so row heights (and everything below them) don't shift.
-- Fixed the reference switch model disappearing in Assembled view -- it now shows (or hides) purely based on its own Show/Hide toggle, in both Assembled and Exploded view.
-- Restyled links inside dialogs (like the bug report email address) to match the muted/underline style used everywhere else on the site instead of the browser's default bold blue.
-- Added a "Report a Bug" link next to Disclaimer/Changelog that opens a dialog pointing to info@bashcreates.ca -- the email address is a mailto link pre-filled with a subject, a report template, and the visitor's browser info, so bug reports show up with useful debugging context already attached.
-- Disabled the Text section whenever the outline shape itself is the imported logo (sample or real upload) -- a logo's own irregular silhouette doesn't leave predictable room for centered text, so the field, font, color, and position sliders all grey out with a short note, and any leftover text is skipped in the actual geometry too.
-- Renamed "Internal Switches" to "Switch Position" and trimmed it down further: hid the viewport switch-labels toggle and the red restriction warning (neither matters once you can't add more than one switch from the UI), and removed the bordered box around the position sliders so they sit flat instead of looking like a drawer nested inside a drawer.
-- Simplified "Internal Switches" to just switch positioning -- the "+ Add switch" / "Auto Space Switches" controls are hidden (multi-switch still works underneath; a saved project with several switches loads and renders fine), but the position sliders stay visible since off-center placement is still a normal thing to want.
-- Shortened the red restriction warnings (Connected Buttons disabled for logos, Internal Switches capped at 1) to a single quick line each instead of a paragraph.
-- Moved "Internal Switches" into Advanced Settings -- most buttons only need one switch, so this keeps the main flow uncluttered while still supporting multiple switches per button for oversized/panel-style buttons.
-- Added a Changelog dialog and a separate Disclaimer dialog, each opened via small links at the bottom of the sidebar.
-- Added a slight 45° chamfer to the top outer edge of both the base and top pieces (shape-agnostic, works on every outline including star/heart/imported logos).
-- Added a Keychain Loop option: a thick, durable loop generated at the far end of the base, with sliders for outer diameter, hole diameter, thickness, and left/right offset; top edge of the loop is rounded.
-- Connected Buttons now automatically caps Internal Switches at 1, preventing duplicate switch instances and reference numbers when multiple buttons are connected.
-- Added browser autosave: the full design now persists across plain page reloads, not just via manual Save/Load Project.
-- Fixed star and heart sample shapes rendering upside-down.
-- Fixed a stale-cache bug where switching sample shapes (without changing button count) left connected buttons over- or under-overlapping until another parameter was nudged.
-- Fixed star and heart samples not overlapping correctly when connected, by measuring true button pitch via CSG intersection instead of bounding-box math.
-- Restricted Connected Buttons to primitive shapes and built-in sample logos only, since real uploaded logos didn't merge/overlap correctly.
-- Added export controls: download the base or top piece separately (or the whole assembly) as STL or 3MF, via Part/Format selectors.
-- Fixed connected buttons populating along the wrong axis (X instead of Y).
-- Fixed a bug where connected button bases didn't actually overlap/fuse for non-circular shapes, due to using outline diameter instead of measured shape width.
-
-## Earlier
-
-- Added the Connected Buttons feature: button count parameter, button-center and expanded-switch helpers, fused multi-button shell geometry, and updated wall-clearance checks and reference-switch/label pooling for multiple buttons.
-- Added a 3D view-cube gizmo (scene, camera, axis labels) rendered as an inset overlay in the viewport, with click-to-snap to standard views.
-- Added support for multiple internal switches per button: data model, a switch list UI (add/remove/position, capped at 4), per-switch pocket and post geometry, instanced reference switch meshes, generalized wall-clearance and switch-spacing checks, and wiring into undo/redo, save/load, and reset.
-- Renamed "Switches" to "Internal Switches" with a clarifying note.
-- Decoupled the logo from the outline shape (importing a logo no longer forces the outline shape to change) and added logo position/scale sliders.
-- Added built-in sample logo shapes with a gallery to pick from, later swapping the Ring sample for a Cross and switching to plain-text numbering.
-- Added Save Project / Load Project buttons.
-- Rebuilt the UI with a left-hand info/control sidebar; moved the title, status, shape dropdown, and reset button into it, later followed by the logo import section.
-- Added commit-based undo/redo, then converted the undo/redo/reset buttons to icons.
-- Added pill-toggle and section-label styling; converted the "Show assembled" checkbox to an Assembled/Exploded pill toggle; numbered the collapsible sections 1-5.
-- Combined the bottom and top piece export into a single 3MF download, and moved the clearance readout into the Overall Size box.
-- Removed outdated reference-file wording and a trailing hint paragraph.
-- Added and refined rounded-edge filleting on button edges: prototyped the algorithm, wired it into the top and bottom builders, fixed spike artifacts on imported logo profiles, then replaced it with a more robust per-edge wedge-tube CSG technique at a fixed, hardcoded-safe radius with a higher segment count for a smoother curve.
-- Added logo import support: PNG contour tracing, color-based clustering, and SVG path sampling, wired into the outline and top-piece geometry, plus a logo import UI and multi-STL export.
+- Fixed die-cut Mounting Holes (Corners/Center) anchoring to the whole backing's bounding box instead of the top line's own -- dragging a lower line wider or further sideways than the top line could push the top line's loops off it entirely. Now anchored to whichever line is actually highest, so they stay on it regardless of what other lines are doing.
+- Added Mounting Holes (both modes): adds a small loop with a hole through it, fused to the top of the backing for hanging on a nail/screw -- same idea as Clicker Generator's keyring loop, not a hole cut into the backing itself. Choose None, Corners (one loop near each top corner of the backing's bounding box), or Center (one loop, centered, near the top edge), with adjustable loop outer diameter, hole diameter, how far in from the side edge each Corners loop sits, and fine left/right + up/down position sliders to nudge placement -- the left/right one is mirrored for Corners, so one slider spreads or pulls in both loops together instead of needing two. Die-cut mode's toggle is greyed out when Outline is off, since there's no backing to fuse it to.
+- Added 10 Google Fonts to the Font dropdown, picked for thick/even strokes that hold up when traced to a 3D-printable outline: Montserrat, Poppins, Bebas Neue, Anton, Fredoka, Baloo 2, Righteous, Archivo Black, Luckiest Guy, and Bungee. Loaded from Google's CDN (see License dialog).
+- Moved the Total/Backing thickness slider out of the Outline (die-cut backing) drawer into its own "Thickness" section on the right panel, since it's the sign's overall thickness, not an outline-specific setting.
+- Added a total size readout in the top-right of the viewport (Width x Depth x Height, mm), updating live as the design changes.
+- Restored the full "Free to use for personal or commercial projects..." wording for the hint text under the Buy Me A Coffee/Boost links (had been over-shortened); Disclaimer dialog left as its original warranty/license text.
+- Added a bug icon next to the "Report a Bug" link; changed the bug-report email from a personal address to info@bashcreates.com; added a note in the Report a Bug dialog inviting Google Fonts suggestions.
+- Fixed Position (left/right)/(fwd/back) sliders showing long floating-point decimals after dragging a line in the 3D viewport (e.g. "34.728193745mm") -- dragged values are now rounded to 0.1mm, both going forward and for values already carrying drift.
+- Moved the "Outline (die-cut backing)" section from the left panel to the right panel, above Export format -- still only shown in Die-cut Text mode.
+- Added Buy Me A Coffee and Boost on MakerWorld links to the right panel, matching the original Clicker Generator project.
+- Added "Align lines": ONE global Manual/Left/Center/Right toggle for each mode's whole text list (not a per-line setting -- an earlier per-line version was confusing, since a lone aligned line had nothing to measure against unless a sibling line also opted in). Left/Center/Right lines up every line in the list to a shared edge (the widest line), overriding each line's own Position (left/right) slider while active. Useful for stacking different-sized lines added as separate objects, since one text box's Line spacing/alignment forces every line inside it to share one size/font.
+- Added Left/Center/Right line alignment buttons per text box, for when a single box has 2+ lines (typed with a line break) -- controls how those lines line up relative to each other, independent of the box's own overall position.
+- Added drag-to-move: click and drag any line of text directly in the 3D viewport to reposition it (updates the same offsetX/offsetY as the Position sliders, which stay in sync live). Hover/drag highlighting and a grab/grabbing cursor show what's draggable; orbiting is disabled for the duration of a drag and re-enabled on release; one undo step per drag, not one per pixel moved.
+- Renamed the backing-height sliders (die-cut Outline height, Shape backing height) to say "Total thickness" in Inlay mode and "Backing thickness (text adds height on top)" in Emboss mode, since only Inlay's recess keeps the slider value as the true total height.
+- Added a per-line Character spacing slider (both modes).
+- In Inlay mode, each line's Text height slider is now greyed out (it doesn't apply -- the recess is always cut as deep as it safely can be into the backing) and relabeled to say so; toggling Emboss/Inlay now refreshes both text lists live.
+- Reworded the Line spacing slider to "Line spacing (if this box has 2+ lines)" to clarify it only affects line breaks typed inside one text box, not separate lines added via "Add line."
+- Added Disclaimer, License, Changelog, and Report a Bug links/dialogs to the sidebar.
+- Fixed a bug where the Text lists (both modes) failed to render and the Add Line/Add Text buttons did nothing, caused by a stale variable reference in the shared list-building code.
+- Made each line in Die-cut mode responsible for its own outline thickness (margin) instead of one shared value for the whole design -- lines with different thicknesses still fuse together where they overlap.
+- Split Die-cut mode's single text block into independent per-line text elements (add/remove lines, each with its own font, size, depth, position, rotation, and color).
+- Added an Emboss/Inlay print-style toggle -- Inlay cuts text as a flush recess into the backing instead of raising it, for printing text-side-down with no supports.
+- Fixed the die-cut outline only showing up behind closed letter counters (like the hole in an "O") instead of growing around the whole word -- a loop-winding-direction bug in the outline generator.
+- Initial build: Die-cut Text mode (type text, optional connecting outline) and Shape + Text mode (pick a backing shape, add independently-placed text), 3MF/STL export for multi-color printing, undo/redo, save/load project, autosave. Ported from Clicker Generator's Manifold/Three.js plumbing, with all keychain-button-specific features removed.

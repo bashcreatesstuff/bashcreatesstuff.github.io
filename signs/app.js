@@ -170,6 +170,13 @@ const DEFAULTS = {
   shapeCornerRadius: 6,    // mm -- square/rectangle only
   shapeDepth: 3,           // mm, backing plate thickness
   shapeColor: '#7c6fe0',
+  // Picture-frame-style trim: a colored border band inset from the
+  // shape's outer edge, same height as the backing, carved out as its OWN
+  // non-overlapping solid (see buildShapeSign()) so it's a clean second
+  // paintable color rather than an overlapping shell.
+  shapeOutlineEnabled: false,
+  shapeOutlineColor: '#7c6fe0',
+  shapeOutlineThickness: 6, // mm, width of the trim band
   textElements: [makeDefaultTextElement()],
   shapeLineAlign: 'manual', // same idea as dieCutLineAlign above, for this mode's text list
   // Same idea as dieCutMountingHoles above -- always has an effect here
@@ -837,8 +844,32 @@ function buildDieCutSign(arena, p) {
 // ---------------------------------------------------------------------
 function buildShapeSign(arena, p) {
   const backingProfile = shapeProfile2D(arena, p);
-  let backingSolid = arena.track(backingProfile.extrude(p.shapeDepth));
   const isInlay = p.engraveStyle === 'inlay';
+
+  // Outline -- a picture-frame-style trim band inset from the shape's
+  // outer edge, same height as the backing. Carved out of the SAME
+  // footprint as its own non-overlapping solid (fill minus trim, trim =
+  // outer minus fill) rather than layering a second solid on top of the
+  // full backing, so the two print as clean, non-conflicting colored
+  // regions instead of overlapping geometry at the same Z range.
+  let fillProfile = backingProfile;
+  let trimProfile = null;
+  if (p.shapeOutlineEnabled && p.shapeOutlineThickness > 0.001) {
+    const eroded = offsetOf(arena, backingProfile, -p.shapeOutlineThickness);
+    if (eroded && !eroded.isEmpty()) {
+      trimProfile = arena.track(backingProfile.subtract(eroded));
+      fillProfile = eroded;
+    } else {
+      // Trim thickness maxed out (would erode past the shape's own
+      // narrowest point) -- the whole shape becomes trim-colored, no
+      // inner fill left, rather than an invalid/empty fill region.
+      trimProfile = backingProfile;
+      fillProfile = null;
+    }
+  }
+
+  let backingSolid = fillProfile ? arena.track(fillProfile.extrude(p.shapeDepth)) : null;
+  let trimSolid = trimProfile ? arena.track(trimProfile.extrude(p.shapeDepth)) : null;
 
   // Pass 1: trace every element with content exactly once, same reasoning
   // as buildDieCutSign() above -- cross-element alignment (pass 2) needs
@@ -870,7 +901,12 @@ function buildShapeSign(arena, p) {
       const recessCut = arena.track(
         arena.track(clipped2D.extrude(depth + 0.2)).translate([0, 0, p.shapeDepth - depth])
       );
-      backingSolid = arena.track(backingSolid.subtract(recessCut));
+      // Subtract from BOTH pieces (fill and trim) rather than assuming
+      // text only ever sits over the fill -- subtracting a non-overlapping
+      // region is always a harmless no-op, so this stays correct even
+      // when a line is dragged out over the trim band.
+      if (backingSolid) backingSolid = arena.track(backingSolid.subtract(recessCut));
+      if (trimSolid) trimSolid = arena.track(trimSolid.subtract(recessCut));
       const solid = arena.track(
         arena.track(clipped2D.extrude(depth)).translate([0, 0, p.shapeDepth - depth])
       );
@@ -885,14 +921,26 @@ function buildShapeSign(arena, p) {
 
   // Mounting loop fused onto the shape backing, if any -- the shape's own
   // footprint (backingProfile) always exists in this mode, unlike
-  // die-cut's optional outline.
-  backingSolid = addMountingLoop(
-    arena, backingSolid, p.shapeMountingHoles, csBounds2D(backingProfile),
-    p.shapeMountingLoopOuterD, p.shapeMountingLoopHoleD, p.shapeMountingLoopMargin,
-    p.shapeMountingLoopOffsetX, p.shapeMountingLoopOffsetY, p.shapeDepth
-  );
+  // die-cut's optional outline. The loop sits right at the outer edge, so
+  // when the Outline trim is on it physically overlaps the TRIM band, not
+  // the (now-inset) fill -- fuse it there instead, so it actually connects
+  // to material rather than floating disconnected. Falls back to the fill
+  // when there's no trim (the normal case).
+  if (trimSolid) {
+    trimSolid = addMountingLoop(
+      arena, trimSolid, p.shapeMountingHoles, csBounds2D(backingProfile),
+      p.shapeMountingLoopOuterD, p.shapeMountingLoopHoleD, p.shapeMountingLoopMargin,
+      p.shapeMountingLoopOffsetX, p.shapeMountingLoopOffsetY, p.shapeDepth
+    );
+  } else if (backingSolid) {
+    backingSolid = addMountingLoop(
+      arena, backingSolid, p.shapeMountingHoles, csBounds2D(backingProfile),
+      p.shapeMountingLoopOuterD, p.shapeMountingLoopHoleD, p.shapeMountingLoopMargin,
+      p.shapeMountingLoopOffsetX, p.shapeMountingLoopOffsetY, p.shapeDepth
+    );
+  }
 
-  return { backingSolid, textLayers };
+  return { backingSolid, trimSolid, textLayers };
 }
 
 // ---------------------------------------------------------------------
@@ -1323,9 +1371,12 @@ function rebuild() {
       }
     });
   } else {
-    const { backingSolid, textLayers } = buildShapeSign(arena, params);
+    const { backingSolid, trimSolid, textLayers } = buildShapeSign(arena, params);
     if (backingSolid && !backingSolid.isEmpty()) {
       parts.push({ name: 'backing', hex: params.shapeColor, manifold: backingSolid });
+    }
+    if (trimSolid && !trimSolid.isEmpty()) {
+      parts.push({ name: 'trim', hex: params.shapeOutlineColor, manifold: trimSolid });
     }
     textLayers.forEach((layer, i) => {
       if (!layer.solid.isEmpty()) {
@@ -1749,6 +1800,9 @@ const SLIDER_DEFS = {
     { key: 'shapeCornerRadius', label: 'Corner radius (square/rectangle only)', min: 0, max: 100, step: 0.5, unit: 'mm' },
     { key: 'shapeDepth', label: backingHeightLabel, min: 0.4, max: 15, step: 0.2, unit: 'mm' },
   ],
+  'group-shapeOutline': [
+    { key: 'shapeOutlineThickness', label: 'Trim width', min: 1, max: 60, step: 0.5, unit: 'mm' },
+  ],
   'group-dieCutMountingHoles': [
     { key: 'dieCutMountingLoopOuterD', label: 'Loop outer diameter', min: 8, max: 30, step: 0.5, unit: 'mm' },
     { key: 'dieCutMountingLoopHoleD', label: 'Loop hole diameter', min: 3, max: 15, step: 0.5, unit: 'mm' },
@@ -1898,7 +1952,8 @@ function buildSliders() {
         // Margin (corner inset) only means something with two corner loops.
         (def.key === 'dieCutMountingLoopMargin' && params.dieCutMountingHoles !== 'corners') ||
         (shapeLoopKeys.includes(def.key) && params.shapeMountingHoles === 'none') ||
-        (def.key === 'shapeMountingLoopMargin' && params.shapeMountingHoles !== 'corners');
+        (def.key === 'shapeMountingLoopMargin' && params.shapeMountingHoles !== 'corners') ||
+        (def.key === 'shapeOutlineThickness' && !params.shapeOutlineEnabled);
       const row = createSliderRow({
         label: typeof def.label === 'function' ? def.label() : def.label,
         min: def.min,
@@ -2169,8 +2224,10 @@ function setMode(mode, { record = true } = {}) {
   // die-cut-only -- Shape mode has its own backing (the shape itself), so
   // hide it there same as the other mode-specific panels above.
   document.getElementById('dieCutOutlinePanel').style.display = mode === 'dieCut' ? '' : 'none';
-  // Shape mode's own Mounting Holes section (its backing is always the
-  // shape itself, so unlike die-cut it never needs to be greyed out).
+  // Shape mode's own Outline (picture-frame trim) and Mounting Holes
+  // sections -- its backing is always the shape itself, so unlike
+  // die-cut's Mounting Holes toggle, neither ever needs to be greyed out.
+  document.getElementById('shapeOutlinePanel').style.display = mode === 'shape' ? '' : 'none';
   document.getElementById('shapeMountingHolesPanel').style.display = mode === 'shape' ? '' : 'none';
   if (record) commitHistory(before);
   rebuild();
@@ -2217,6 +2274,28 @@ function setDieCutOutlineEnabled(enabled) {
 }
 document.getElementById('dieCutOutlineOnBtn').addEventListener('click', () => setDieCutOutlineEnabled(true));
 document.getElementById('dieCutOutlineOffBtn').addEventListener('click', () => setDieCutOutlineEnabled(false));
+
+// ---------------------------------------------------------------------
+// Shape mode's Outline (picture-frame trim) -- on/off + color, same
+// pattern as die-cut's Outline above. Unlike die-cut, this never gates
+// anything else (the shape backing always exists regardless), so there's
+// no availability toggle to update elsewhere.
+// ---------------------------------------------------------------------
+const shapeOutlineColorEl = document.getElementById('shapeOutlineColorInput');
+shapeOutlineColorEl.addEventListener('input', () => { params.shapeOutlineColor = shapeOutlineColorEl.value; queueRebuild(); });
+shapeOutlineColorEl.addEventListener('change', () => commitHistory(snapshotState()));
+
+function setShapeOutlineEnabled(enabled) {
+  const before = snapshotState();
+  params.shapeOutlineEnabled = enabled;
+  document.getElementById('shapeOutlineOnBtn').classList.toggle('active', enabled);
+  document.getElementById('shapeOutlineOffBtn').classList.toggle('active', !enabled);
+  commitHistory(before);
+  buildSliders();
+  rebuild();
+}
+document.getElementById('shapeOutlineOnBtn').addEventListener('click', () => setShapeOutlineEnabled(true));
+document.getElementById('shapeOutlineOffBtn').addEventListener('click', () => setShapeOutlineEnabled(false));
 
 // ---------------------------------------------------------------------
 // "Align lines" -- ONE global Manual/Left/Center/Right toggle per mode's
@@ -2385,6 +2464,9 @@ function applySnapshot(snap) {
   dieCutOutlineColorEl.value = params.dieCutOutlineColor;
   document.getElementById('dieCutOutlineOnBtn').classList.toggle('active', params.dieCutOutlineEnabled);
   document.getElementById('dieCutOutlineOffBtn').classList.toggle('active', !params.dieCutOutlineEnabled);
+  shapeOutlineColorEl.value = params.shapeOutlineColor;
+  document.getElementById('shapeOutlineOnBtn').classList.toggle('active', params.shapeOutlineEnabled);
+  document.getElementById('shapeOutlineOffBtn').classList.toggle('active', !params.shapeOutlineEnabled);
   document.getElementById('engraveEmbossBtn').classList.toggle('active', params.engraveStyle === 'emboss');
   document.getElementById('engraveInlayBtn').classList.toggle('active', params.engraveStyle === 'inlay');
   syncLineAlignButtons();
@@ -2558,6 +2640,9 @@ async function main() {
   dieCutOutlineColorEl.value = params.dieCutOutlineColor;
   document.getElementById('dieCutOutlineOnBtn').classList.toggle('active', params.dieCutOutlineEnabled);
   document.getElementById('dieCutOutlineOffBtn').classList.toggle('active', !params.dieCutOutlineEnabled);
+  shapeOutlineColorEl.value = params.shapeOutlineColor;
+  document.getElementById('shapeOutlineOnBtn').classList.toggle('active', params.shapeOutlineEnabled);
+  document.getElementById('shapeOutlineOffBtn').classList.toggle('active', !params.shapeOutlineEnabled);
   document.getElementById('engraveEmbossBtn').classList.toggle('active', params.engraveStyle === 'emboss');
   document.getElementById('engraveInlayBtn').classList.toggle('active', params.engraveStyle === 'inlay');
   syncLineAlignButtons();

@@ -175,6 +175,20 @@ html, body {
   margin: 0 0 14px;
 }
 
+.tagline a {
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.tagline a:hover {
+  color: var(--text);
+}
+
+.tagline .emote {
+  font-style: normal;
+  display: inline-block;
+}
+
 .status {
   /* Kept in the DOM (rebuild() writes status/error text into it) but not
      shown -- the happy-path "Ready" text just took up vertical space.

@@ -1,0 +1,31 @@
+# Changelog
+
+Kept in sync with the in-app Changelog dialog (`index.html`) by hand --
+update both on every change or same-session batch of changes.
+
+## 2026-08-02
+
+- Fixed die-cut Mounting Holes (Corners/Center) anchoring to the whole backing's bounding box instead of the top line's own -- dragging a lower line wider or further sideways than the top line could push the top line's loops off it entirely. Now anchored to whichever line is actually highest, so they stay on it regardless of what other lines are doing.
+- Added Mounting Holes (both modes): adds a small loop with a hole through it, fused to the top of the backing for hanging on a nail/screw -- same idea as Clicker Generator's keyring loop, not a hole cut into the backing itself. Choose None, Corners (one loop near each top corner of the backing's bounding box), or Center (one loop, centered, near the top edge), with adjustable loop outer diameter, hole diameter, how far in from the side edge each Corners loop sits, and fine left/right + up/down position sliders to nudge placement -- the left/right one is mirrored for Corners, so one slider spreads or pulls in both loops together instead of needing two. Die-cut mode's toggle is greyed out when Outline is off, since there's no backing to fuse it to.
+- Added 10 Google Fonts to the Font dropdown, picked for thick/even strokes that hold up when traced to a 3D-printable outline: Montserrat, Poppins, Bebas Neue, Anton, Fredoka, Baloo 2, Righteous, Archivo Black, Luckiest Guy, and Bungee. Loaded from Google's CDN (see License dialog).
+- Moved the Total/Backing thickness slider out of the Outline (die-cut backing) drawer into its own "Thickness" section on the right panel, since it's the sign's overall thickness, not an outline-specific setting.
+- Added a total size readout in the top-right of the viewport (Width x Depth x Height, mm), updating live as the design changes.
+- Restored the full "Free to use for personal or commercial projects..." wording for the hint text under the Buy Me A Coffee/Boost links (had been over-shortened); Disclaimer dialog left as its original warranty/license text.
+- Added a bug icon next to the "Report a Bug" link; changed the bug-report email from a personal address to info@bashcreates.com; added a note in the Report a Bug dialog inviting Google Fonts suggestions.
+- Fixed Position (left/right)/(fwd/back) sliders showing long floating-point decimals after dragging a line in the 3D viewport (e.g. "34.728193745mm") -- dragged values are now rounded to 0.1mm, both going forward and for values already carrying drift.
+- Moved the "Outline (die-cut backing)" section from the left panel to the right panel, above Export format -- still only shown in Die-cut Text mode.
+- Added Buy Me A Coffee and Boost on MakerWorld links to the right panel, matching the original Clicker Generator project.
+- Added "Align lines": ONE global Manual/Left/Center/Right toggle for each mode's whole text list (not a per-line setting -- an earlier per-line version was confusing, since a lone aligned line had nothing to measure against unless a sibling line also opted in). Left/Center/Right lines up every line in the list to a shared edge (the widest line), overriding each line's own Position (left/right) slider while active. Useful for stacking different-sized lines added as separate objects, since one text box's Line spacing/alignment forces every line inside it to share one size/font.
+- Added Left/Center/Right line alignment buttons per text box, for when a single box has 2+ lines (typed with a line break) -- controls how those lines line up relative to each other, independent of the box's own overall position.
+- Added drag-to-move: click and drag any line of text directly in the 3D viewport to reposition it (updates the same offsetX/offsetY as the Position sliders, which stay in sync live). Hover/drag highlighting and a grab/grabbing cursor show what's draggable; orbiting is disabled for the duration of a drag and re-enabled on release; one undo step per drag, not one per pixel moved.
+- Renamed the backing-height sliders (die-cut Outline height, Shape backing height) to say "Total thickness" in Inlay mode and "Backing thickness (text adds height on top)" in Emboss mode, since only Inlay's recess keeps the slider value as the true total height.
+- Added a per-line Character spacing slider (both modes).
+- In Inlay mode, each line's Text height slider is now greyed out (it doesn't apply -- the recess is always cut as deep as it safely can be into the backing) and relabeled to say so; toggling Emboss/Inlay now refreshes both text lists live.
+- Reworded the Line spacing slider to "Line spacing (if this box has 2+ lines)" to clarify it only affects line breaks typed inside one text box, not separate lines added via "Add line."
+- Added Disclaimer, License, Changelog, and Report a Bug links/dialogs to the sidebar.
+- Fixed a bug where the Text lists (both modes) failed to render and the Add Line/Add Text buttons did nothing, caused by a stale variable reference in the shared list-building code.
+- Made each line in Die-cut mode responsible for its own outline thickness (margin) instead of one shared value for the whole design -- lines with different thicknesses still fuse together where they overlap.
+- Split Die-cut mode's single text block into independent per-line text elements (add/remove lines, each with its own font, size, depth, position, rotation, and color).
+- Added an Emboss/Inlay print-style toggle -- Inlay cuts text as a flush recess into the backing instead of raising it, for printing text-side-down with no supports.
+- Fixed the die-cut outline only showing up behind closed letter counters (like the hole in an "O") instead of growing around the whole word -- a loop-winding-direction bug in the outline generator.
+- Initial build: Die-cut Text mode (type text, optional connecting outline) and Shape + Text mode (pick a backing shape, add independently-placed text), 3MF/STL export for multi-color printing, undo/redo, save/load project, autosave. Ported from Clicker Generator's Manifold/Three.js plumbing, with all keychain-button-specific features removed.

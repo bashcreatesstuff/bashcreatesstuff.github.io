@@ -117,7 +117,7 @@ const DEFAULTS = {
   // prints cleanly face-down (text touching the build plate) with no
   // supports, and the color boundary between text and backing shows on
   // that flat face once flipped over.
-  engraveStyle: 'emboss', // 'emboss' | 'inlay'
+  engraveStyle: 'inlay', // 'emboss' | 'inlay'
 
   // ---- Die-cut text mode ----
   // One or more independent text elements (same shape as shape mode's
@@ -153,14 +153,37 @@ const DEFAULTS = {
   dieCutMountingHoles: 'none',
   dieCutMountingLoopOuterD: 14, // mm, overall loop diameter
   dieCutMountingLoopHoleD: 5,   // mm, the hole a nail/screw actually goes through
-  dieCutMountingLoopMargin: 10, // mm, how far each corner loop sits in from the side edge ('center' ignores this)
   // Fine-position offsets on top of the automatic corner/center placement
   // above. For 'corners', offsetX is MIRRORED -- one slider spreads both
   // loops outward (positive) or pulls them inward (negative) together,
   // rather than needing two independent left/right sliders. offsetY moves
   // both loops (or the single center loop) up/down together either way.
+  // Corner inset from the edge is a fixed MOUNTING_LOOP_CORNER_INSET baked
+  // into mountingLoopShape2D rather than its own slider -- redundant with
+  // offsetX for the same reason the magnet-hole Margin slider was (see the
+  // note there).
   dieCutMountingLoopOffsetX: 0, // mm
   dieCutMountingLoopOffsetY: 0, // mm
+  // 'none' | 'corners' | 'center' -- CUTS a round pocket into the BACK
+  // (bottom) face of the outline backing for embedding a magnet. Only has
+  // an effect when dieCutOutlineEnabled is on. Blind by default (doesn't
+  // reach the front) -- if dieCutMagnetHoleDepth is set deeper than the
+  // backing's own thickness, it becomes a through-hole, which doubles as
+  // a mounting hole. Same None/Corners/Center placement pattern as
+  // dieCutMountingHoles above (top corners / top-center of the backing's
+  // bounding box), just cut as a plain pocket rather than an added loop.
+  dieCutMagnetHoles: 'none',
+  dieCutMagnetHoleDiameter: 6, // mm
+  dieCutMagnetHoleDepth: 2,    // mm, cut depth from the back face
+  dieCutMagnetHoleOffsetX: 0,  // mm, mirrored for 'corners' -- see dieCutMountingLoopOffsetX above.
+                                // Corner inset from the edge is a fixed
+                                // CORNER_EDGE_INSET baked into
+                                // magnetHoleCircles2D rather than its own
+                                // slider -- redundant with this one, since
+                                // both add into the same term (see the
+                                // "position slider" simplification note
+                                // there).
+  dieCutMagnetHoleOffsetY: 0,  // mm
 
   // ---- Shape + text mode ----
   shapeType: 'rectangle',  // 'square' | 'rectangle' | 'circle' | 'heart' | 'star' | 'hexagon' | 'cross'
@@ -184,9 +207,80 @@ const DEFAULTS = {
   shapeMountingHoles: 'none',
   shapeMountingLoopOuterD: 14, // mm
   shapeMountingLoopHoleD: 5,   // mm
-  shapeMountingLoopMargin: 10, // mm
   shapeMountingLoopOffsetX: 0, // mm, mirrored for 'corners' -- see dieCutMountingLoopOffsetX above
   shapeMountingLoopOffsetY: 0, // mm
+  // Same idea as dieCutMagnetHoles above -- always has an effect here
+  // since shape mode's backing plate always exists.
+  shapeMagnetHoles: 'none',
+  shapeMagnetHoleDiameter: 6, // mm
+  shapeMagnetHoleDepth: 2,    // mm, cut depth from the back face
+  shapeMagnetHoleOffsetX: 0,  // mm, mirrored for 'corners' -- see dieCutMagnetHoleOffsetX above
+  shapeMagnetHoleOffsetY: 0,  // mm
+
+  // ---- QR Code + Text mode ----
+  // A third mode. 'generate' encodes qrContent live via the vendored
+  // qrcode-generator library; 'import' traces an uploaded QR image the
+  // same way (see qrModulesToMmLoops() / syncQrImportedImage()) -- both
+  // paths converge on the same canvas-raster-then-trace pipeline
+  // textToMmLoops() already uses, so the geometry code doesn't care which
+  // source the pattern came from. Also has its own independent text list,
+  // built exactly like buildDieCutSign()'s text+outline (each line can
+  // grow its OWN die-cut style outline via outlineMargin, combined into
+  // one shared backing wherever lines overlap) -- NOT clipped to or
+  // reliant on the QR pattern's own backing, so a caption is a genuinely
+  // separate, self-supporting physical object, positioned/added/removed
+  // the exact same way as Die-cut Text mode's lines. Starts EMPTY -- a
+  // caption is optional on top of the QR code (which is the mode's real
+  // content), unlike Die-cut/Shape mode where the text list IS the whole
+  // design -- add one with "+ Add text" when wanted (see
+  // qrTextListConfig.extraDefaultsFn for the default offsetY that keeps a
+  // newly-added line clear of the QR pattern's own footprint).
+  qrTextElements: [],
+  qrLineAlign: 'manual', // same idea as dieCutLineAlign/shapeLineAlign above, for this mode's text list
+  qrContentSource: 'generate', // 'generate' | 'import'
+  qrContent: 'https://example.com', // text/URL encoded when 'generate'
+  qrErrorCorrection: 'M',   // 'L' | 'M' | 'Q' | 'H' -- higher survives more
+                             // print imperfections at the cost of a denser
+                             // pattern for the same content
+  qrImportedImageDataUrl: null, // data: URL of the uploaded image when 'import'
+  qrColor: '#1a1a1a',       // dark-module color
+  qrBackingColor: '#f0f0f7', // backing plate color
+  qrSize: 60,   // mm, edge length of the QR pattern itself (excludes the
+                // quiet-zone margin baked into the backing around it)
+  qrDepth: 3,   // mm, backing plate thickness
+  // Rounds the backing/trim's own corners -- capped at the quiet zone's
+  // width at render time (see buildQrSign()) so no matter how far this is
+  // dragged, rounding can never reach into the QR pattern's own modules;
+  // the QR mark is always clipped against a plain, unrounded square.
+  qrCornerRadius: 0, // mm
+  // How tall the QR pattern stands above the backing in Emboss mode --
+  // Inlay mode ignores this and always cuts as deep as it safely can, same
+  // convention as text's per-line depth slider (greyed out in Inlay).
+  qrMarkDepth: 1.5, // mm
+  // Picture-frame-style trim around the QR's own backing, same pattern as
+  // shapeOutline* above -- ALSO doubles as the master on/off + color for
+  // the caption text list's own die-cut style outline (see qrTextElements'
+  // per-line outlineMargin and buildQrSign()), one shared "Outline"
+  // feature/drawer instead of two separate ones. Defaults OFF, same as
+  // shapeOutlineEnabled -- QR mode's own content (the scannable pattern)
+  // needs no trim to read fine on its own, and now that qrTextElements
+  // itself defaults to empty there's no caption at boot that would need a
+  // backing either.
+  qrOutlineEnabled: false,
+  qrOutlineColor: '#7c6fe0',
+  qrOutlineThickness: 6, // mm
+  // Same None/Corners/Center pattern as shapeMountingHoles/shapeMagnetHoles
+  // above -- the QR backing plate always exists, so these always apply.
+  qrMountingHoles: 'none',
+  qrMountingLoopOuterD: 14, // mm
+  qrMountingLoopHoleD: 5,   // mm
+  qrMountingLoopOffsetX: 0, // mm, mirrored for 'corners'
+  qrMountingLoopOffsetY: 0, // mm
+  qrMagnetHoles: 'none',
+  qrMagnetHoleDiameter: 6, // mm
+  qrMagnetHoleDepth: 2,    // mm, cut depth from the back face
+  qrMagnetHoleOffsetX: 0,  // mm, mirrored for 'corners'
+  qrMagnetHoleOffsetY: 0,  // mm
 };
 
 function cloneParams(source) {
@@ -194,6 +288,7 @@ function cloneParams(source) {
     ...source,
     dieCutTextElements: source.dieCutTextElements.map((t) => ({ ...t })),
     textElements: source.textElements.map((t) => ({ ...t })),
+    qrTextElements: source.qrTextElements.map((t) => ({ ...t })),
   };
 }
 
@@ -516,10 +611,138 @@ function textToMmLoops(text, sizeMm, lineSpacing, fontFamily, charSpacingMm, lin
 }
 
 // ---------------------------------------------------------------------
+// QR Code mode -- generates (via the vendored qrcode-generator library,
+// loaded as window.qrcode by a plain <script> tag before this module) or
+// imports a QR pattern, then traces it through the exact same
+// canvas-raster -> marching-squares pipeline textToMmLoops() uses for
+// fonts above, so both sources produce ordinary mm-space loops the rest
+// of the geometry code already knows how to extrude/union/subtract, and
+// touching modules merge into fewer, larger loops instead of one shape
+// per module (much cheaper for the CSG steps that follow than unioning
+// thousands of individual unit squares would be).
+// ---------------------------------------------------------------------
+const QR_PX_PER_MODULE = 10; // rasterization resolution -- arbitrary, just needs to be crisp enough for marching squares to trace clean right angles
+
+// Cached decoded <img> for QR Import mode, kept in sync with
+// params.qrImportedImageDataUrl (a plain string, so IT round-trips through
+// undo/redo and save/load fine on its own) by re-decoding whenever that
+// string changes. Mirrors the general "extra state alongside params"
+// pattern from the reference project (e.g. a cached imported logo) rather
+// than storing a live Image object inside params itself, which wouldn't
+// survive JSON serialization.
+let qrImportedImage = null;
+let qrImportedImageSrc = null;
+
+function syncQrImportedImage() {
+  if (params.qrImportedImageDataUrl === qrImportedImageSrc) return;
+  qrImportedImageSrc = params.qrImportedImageDataUrl;
+  if (!params.qrImportedImageDataUrl) {
+    qrImportedImage = null;
+    return;
+  }
+  const expected = params.qrImportedImageDataUrl;
+  const img = new Image();
+  img.onload = () => {
+    // Only adopt this image if it's still the one params wants -- avoids a
+    // race where an older/slower decode resolves after a newer one already
+    // finished (e.g. undo/redo firing rapidly), which would otherwise
+    // flicker back to stale content.
+    if (params.qrImportedImageDataUrl !== expected) return;
+    qrImportedImage = img;
+    rebuild();
+  };
+  img.onerror = () => {
+    if (params.qrImportedImageDataUrl !== expected) return;
+    qrImportedImage = null;
+  };
+  img.src = expected;
+}
+
+// Rasterizes the current QR content (generated or imported) to a canvas
+// and traces it -- returns { loops, sizeMm } in the same mm-space,
+// origin-centered shape textToMmLoops() returns, scaled so the traced
+// pattern's own extent equals p.qrSize. Returns null if there's nothing
+// to show yet (empty content, image still loading, or content too long
+// for even the largest QR version at the current error-correction level).
+function qrModulesToMmLoops(p) {
+  let canvas;
+  if (p.qrContentSource === 'import') {
+    const img = qrImportedImage;
+    if (!img || !img.width || !img.height) return null;
+    canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+  } else {
+    const text = (p.qrContent || '').trim();
+    if (!text || typeof window === 'undefined' || !window.qrcode) return null;
+    let qr;
+    try {
+      qr = window.qrcode(0, p.qrErrorCorrection || 'M'); // typeNumber 0 = auto-select smallest version that fits
+      qr.addData(text);
+      qr.make();
+    } catch (err) {
+      // Content too long to fit even at the largest QR version -- fail
+      // soft (no QR layer this rebuild) rather than throwing and breaking
+      // the whole pipeline.
+      return null;
+    }
+    const n = qr.getModuleCount();
+    canvas = document.createElement('canvas');
+    canvas.width = n * QR_PX_PER_MODULE;
+    canvas.height = n * QR_PX_PER_MODULE;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#000';
+    for (let row = 0; row < n; row++) {
+      for (let col = 0; col < n; col++) {
+        if (qr.isDark(row, col)) {
+          ctx.fillRect(col * QR_PX_PER_MODULE, row * QR_PX_PER_MODULE, QR_PX_PER_MODULE, QR_PX_PER_MODULE);
+        }
+      }
+    }
+  }
+
+  const w = canvas.width, h = canvas.height;
+  if (w <= 0 || h <= 0) return null;
+  const { data } = canvas.getContext('2d').getImageData(0, 0, w, h);
+  const mask = new Uint8Array(w * h);
+  let any = false;
+  for (let i = 0; i < w * h; i++) {
+    // Alpha AND darkness -- generated QR is always pure black on a blank
+    // canvas (alpha alone would do), but an imported image could be any
+    // color depth/compression artifact, so also require the pixel to
+    // actually be dark (luma-based) rather than just non-transparent.
+    const a = data[i * 4 + 3];
+    const luma = 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2];
+    if (a > 128 && luma < 128) { mask[i] = 1; any = true; }
+  }
+  if (!any) return null;
+
+  const pixelLoops = traceMaskToPixelLoops(mask, w, h, 0.75, 1);
+  if (pixelLoops.length === 0) return null;
+
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const loop of pixelLoops) {
+    for (const [x, y] of loop) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  const extentPx = Math.max(maxX - minX, maxY - minY, 1);
+  const scale = (p.qrSize || 1) / extentPx;
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  const mmLoops = pixelLoops.map((loop) => loop.map(([x, y]) => [(x - cx) * scale, -(y - cy) * scale]));
+
+  return { loops: mmLoops, sizeMm: extentPx * scale };
+}
+
+// ---------------------------------------------------------------------
 // 2D shape helpers
 // ---------------------------------------------------------------------
-function offsetOf(arena, cs, delta) {
-  return arena.track(cs.offset(delta, 'Round', 2, SEGMENTS));
+function offsetOf(arena, cs, delta, joinType) {
+  return arena.track(cs.offset(delta, joinType || 'Round', 2, SEGMENTS));
 }
 
 function roundCorners(arena, cs, r) {
@@ -645,12 +868,23 @@ function csBounds2D(cs) {
   return { minX: b.min[0], minY: b.min[1], maxX: b.max[0], maxY: b.max[1] };
 }
 
+// Fixed inset from each side edge for Corners placement -- used to be its
+// own "Margin" slider, but it turned out to be redundant with the Fine
+// position (left/right) slider: margin's only effect (minX + margin - ox /
+// maxX - margin + ox) adds into the exact same term offsetX already does,
+// so any corner-loop position reachable with margin was already reachable
+// with offsetX alone. Baked in here instead of removed outright so the
+// DEFAULT corner position (10mm in from each edge) stays exactly what it
+// was before. (Center mode never used margin at all -- see anchorXs below.)
+const MOUNTING_LOOP_CORNER_INSET = 10; // mm
+
 // Builds the mounting-loop 2D shape(s) (already positioned) for a backing
 // whose bounds are `bounds` -- null if holes are off or there's no backing
 // to measure. 'corners' adds one loop near each of the TWO TOP corners of
-// the bounding box, inset `margin` from the side edge; 'center' adds one
-// loop centered horizontally. Each loop is a ring (outer circle minus the
-// actual hanging hole) whose center sits just above the backing's own top
+// the bounding box, inset MOUNTING_LOOP_CORNER_INSET from the side edge;
+// 'center' adds one loop centered horizontally. Each loop is a ring (outer
+// circle minus the actual hanging hole) whose center sits just above the
+// backing's own top
 // edge, dipping down `embed` mm into the backing so the two solids
 // genuinely overlap and fuse into one piece once unioned together --
 // bounding-box-based, so it's most predictable for roughly rectangular
@@ -664,7 +898,7 @@ function csBounds2D(cs) {
 // (positive) or pulls them inward (negative) together, rather than needing
 // two independent left/right sliders. For 'center' it's a plain shift.
 // offsetY moves every loop up/down together either way.
-function mountingLoopShape2D(arena, mode, bounds, outerD, holeD, margin, offsetX, offsetY) {
+function mountingLoopShape2D(arena, mode, bounds, outerD, holeD, offsetX, offsetY) {
   if (!bounds || !mode || mode === 'none' || outerD <= 0) return null;
   const outerR = outerD / 2;
   const MIN_WALL = 1; // minimum ring wall thickness, mm
@@ -674,8 +908,9 @@ function mountingLoopShape2D(arena, mode, bounds, outerD, holeD, margin, offsetX
   const { minX, maxX, maxY } = bounds;
   const ox = offsetX || 0;
   const oy = offsetY || 0;
+  const inset = MOUNTING_LOOP_CORNER_INSET;
   const anchorXs =
-    mode === 'corners' ? [minX + margin - ox, maxX - margin + ox]
+    mode === 'corners' ? [minX + inset - ox, maxX - inset + ox]
     : mode === 'center' ? [(minX + maxX) / 2 + ox]
     : [];
 
@@ -703,11 +938,70 @@ function mountingLoopShape2D(arena, mode, bounds, outerD, holeD, margin, offsetX
 // onto `solid` -- added AFTER the main body is otherwise complete, same
 // order as the keychain loop reference (fused on top of everything else,
 // including any inlay recess). Returns `solid` unchanged if holes are off.
-function addMountingLoop(arena, solid, mode, bounds, outerD, holeD, margin, offsetX, offsetY, depth) {
-  const loop2D = mountingLoopShape2D(arena, mode, bounds, outerD, holeD, margin, offsetX, offsetY);
+function addMountingLoop(arena, solid, mode, bounds, outerD, holeD, offsetX, offsetY, depth) {
+  const loop2D = mountingLoopShape2D(arena, mode, bounds, outerD, holeD, offsetX, offsetY);
   if (!loop2D) return solid;
   const loopSolid = arena.track(loop2D.extrude(depth));
   return arena.track(solid.add(loopSolid));
+}
+
+// ---------------------------------------------------------------------
+// Magnet holes -- plain round pocket(s) cut into the BACK (bottom, z=0)
+// face of the backing, for embedding a magnet. Same None/Corners/Center
+// placement pattern as the mounting loop above (top corners / top-center
+// of the backing's own bounding box, inset by `margin`, with the same
+// mirrored-for-Corners offsetX / plain offsetY fine-position), but a
+// simple circle rather than a ring, and cut FROM THE BACK rather than
+// added to the top edge.
+// ---------------------------------------------------------------------
+// Fixed inset from each edge for Corners/Center placement -- used to be
+// its own "Margin" slider, but it turned out to be redundant with the
+// Fine position (left/right)/(up/down) sliders: margin's X contribution
+// (minX + margin - offsetX / maxX - margin + offsetX) and its Y
+// contribution (maxY - margin + offsetY) each just add into the exact
+// same term as one of the fine-position sliders, so any position reachable
+// with margin was already reachable with offsetX/offsetY alone. Baked in
+// here instead of removed outright so the DEFAULT corner position (10mm
+// in from each edge) stays exactly what it was before, with the fine
+// sliders now doing 100% of the adjusting instead of splitting the job
+// with a third, overlapping control.
+const MAGNET_HOLE_CORNER_INSET = 10; // mm
+
+function magnetHoleCircles2D(arena, mode, bounds, diameter, offsetX, offsetY) {
+  if (!bounds || !mode || mode === 'none' || diameter <= 0) return null;
+  const r = diameter / 2;
+  const { minX, maxX, maxY } = bounds;
+  const ox = offsetX || 0;
+  const oy = offsetY || 0;
+  const inset = MAGNET_HOLE_CORNER_INSET;
+  const anchors =
+    mode === 'corners' ? [minX + inset - ox, maxX - inset + ox]
+    : mode === 'center' ? [(minX + maxX) / 2 + ox]
+    : [];
+  let result = null;
+  for (const cx of anchors) {
+    const cy = maxY - inset + oy;
+    const circle = arena.track(arena.track(CrossSection.circle(r, SEGMENTS)).translate([cx, cy]));
+    result = result ? arena.track(CrossSection.union(result, circle)) : circle;
+  }
+  return result;
+}
+
+// Subtracts the magnet-hole pocket(s) from `solid`, cut from the back
+// face upward by `depth` (with a little overshoot below z=0 so the cut is
+// clean at the back surface). Deliberately does NOT clamp `depth` to the
+// backing's own thickness -- if it's set deeper than that, the cylinder
+// simply extends past the material's own top face, which naturally
+// produces a clean through-hole via ordinary CSG subtraction (no separate
+// "through mode" needed), and that through-hole doubles as a mounting
+// hole exactly as intended. Returns `solid` unchanged if holes are off.
+function subtractMagnetHoles(arena, solid, mode, bounds, diameter, offsetX, offsetY, depth) {
+  const holes2D = magnetHoleCircles2D(arena, mode, bounds, diameter, offsetX, offsetY);
+  if (!holes2D || !solid) return solid;
+  const holesSolid = arena.track(
+    arena.track(holes2D.extrude(depth + 0.5)).translate([0, 0, -0.5])
+  );
+  return arena.track(solid.subtract(holesSolid));
 }
 
 // ---------------------------------------------------------------------
@@ -829,9 +1123,35 @@ function buildDieCutSign(arena, p) {
   if (outlineSolid && (topLineBounds || combinedOutline2D)) {
     outlineSolid = addMountingLoop(
       arena, outlineSolid, p.dieCutMountingHoles, topLineBounds || csBounds2D(combinedOutline2D),
-      p.dieCutMountingLoopOuterD, p.dieCutMountingLoopHoleD, p.dieCutMountingLoopMargin,
+      p.dieCutMountingLoopOuterD, p.dieCutMountingLoopHoleD,
       p.dieCutMountingLoopOffsetX, p.dieCutMountingLoopOffsetY, p.dieCutOutlineDepth
     );
+  }
+
+  // Magnet holes cut into the BACK of the outline backing, if any --
+  // applied AFTER the mounting loop above so the two interact correctly
+  // via ordinary CSG if a magnet hole happens to land under a loop
+  // (subtracting from the loop-inclusive solid, not a separate one). Also
+  // subtracted from each text layer's own solid -- text is a separate
+  // exported part sitting on/in the backing, not part of outlineSolid
+  // itself, so without this a hole deep enough to reach a raised (emboss)
+  // or recessed (inlay) letter would carve the backing clean but leave the
+  // letter bridging over the hole uncut. Harmless no-op via ordinary CSG
+  // wherever a layer's own Z range doesn't reach that deep.
+  if (outlineSolid && (topLineBounds || combinedOutline2D)) {
+    const magnetBounds = topLineBounds || csBounds2D(combinedOutline2D);
+    outlineSolid = subtractMagnetHoles(
+      arena, outlineSolid, p.dieCutMagnetHoles, magnetBounds,
+      p.dieCutMagnetHoleDiameter,
+      p.dieCutMagnetHoleOffsetX, p.dieCutMagnetHoleOffsetY, p.dieCutMagnetHoleDepth
+    );
+    for (const layer of textLayers) {
+      layer.solid = subtractMagnetHoles(
+        arena, layer.solid, p.dieCutMagnetHoles, magnetBounds,
+        p.dieCutMagnetHoleDiameter,
+        p.dieCutMagnetHoleOffsetX, p.dieCutMagnetHoleOffsetY, p.dieCutMagnetHoleDepth
+      );
+    }
   }
 
   return { textLayers, outlineSolid };
@@ -929,18 +1249,292 @@ function buildShapeSign(arena, p) {
   if (trimSolid) {
     trimSolid = addMountingLoop(
       arena, trimSolid, p.shapeMountingHoles, csBounds2D(backingProfile),
-      p.shapeMountingLoopOuterD, p.shapeMountingLoopHoleD, p.shapeMountingLoopMargin,
+      p.shapeMountingLoopOuterD, p.shapeMountingLoopHoleD,
       p.shapeMountingLoopOffsetX, p.shapeMountingLoopOffsetY, p.shapeDepth
     );
   } else if (backingSolid) {
     backingSolid = addMountingLoop(
       arena, backingSolid, p.shapeMountingHoles, csBounds2D(backingProfile),
-      p.shapeMountingLoopOuterD, p.shapeMountingLoopHoleD, p.shapeMountingLoopMargin,
+      p.shapeMountingLoopOuterD, p.shapeMountingLoopHoleD,
       p.shapeMountingLoopOffsetX, p.shapeMountingLoopOffsetY, p.shapeDepth
     );
   }
 
+  // Magnet holes cut into the BACK of the shape backing, if any --
+  // applied AFTER the mounting loop above (same reasoning as die-cut).
+  // Unlike the loop, a plain subtraction is always a safe no-op where
+  // there's no overlap, so it's applied to BOTH the fill and the trim
+  // (whichever exist) rather than needing to pick just one -- and to every
+  // text layer's own solid too, so a hole deep enough to reach a raised
+  // (emboss) or recessed (inlay) letter carves through the letter instead
+  // of leaving it bridging over the hole. (Depth here is the Hole depth
+  // slider, not shapeDepth -- passing shapeDepth was a bug that made every
+  // shape-mode magnet hole ignore the slider and always cut exactly to the
+  // backing's own thickness.)
+  const magnetBounds = csBounds2D(backingProfile);
+  backingSolid = subtractMagnetHoles(
+    arena, backingSolid, p.shapeMagnetHoles, magnetBounds,
+    p.shapeMagnetHoleDiameter,
+    p.shapeMagnetHoleOffsetX, p.shapeMagnetHoleOffsetY, p.shapeMagnetHoleDepth
+  );
+  trimSolid = subtractMagnetHoles(
+    arena, trimSolid, p.shapeMagnetHoles, magnetBounds,
+    p.shapeMagnetHoleDiameter,
+    p.shapeMagnetHoleOffsetX, p.shapeMagnetHoleOffsetY, p.shapeMagnetHoleDepth
+  );
+  for (const layer of textLayers) {
+    layer.solid = subtractMagnetHoles(
+      arena, layer.solid, p.shapeMagnetHoles, magnetBounds,
+      p.shapeMagnetHoleDiameter,
+      p.shapeMagnetHoleOffsetX, p.shapeMagnetHoleOffsetY, p.shapeMagnetHoleDepth
+    );
+  }
+
   return { backingSolid, trimSolid, textLayers };
+}
+
+// ---------------------------------------------------------------------
+// QR Code + Text mode -- TWO independent objects sharing one design:
+// 1) a square backing plate sized to the QR pattern plus a fixed
+//    quiet-zone margin (always present, not user-removable, since a QR
+//    code without one may not scan -- separate from the optional
+//    decorative Outline trim), with the QR pattern itself raised (Emboss)
+//    or recessed (Inlay) on top. Same fill/trim split, mounting-loop, and
+//    magnet-hole structure as buildShapeSign() above.
+// 2) an optional caption text list, built exactly like buildDieCutSign()'s
+//    text+outline (each line can grow its own die-cut style backing) --
+//    a genuinely separate, self-supporting object, not clipped to or
+//    reliant on the QR backing in any way. Positioned independently, so
+//    it can sit beside the QR code, on its own elsewhere on the plate, or
+//    be dragged to overlap/fuse with it if the user wants that.
+// ---------------------------------------------------------------------
+function buildQrSign(arena, p) {
+  const quietZone = Math.max(3, (p.qrSize || 0) * 0.08); // mm, ~4-module-equivalent margin scaled to size
+  const innerSide = (p.qrSize || 0) + quietZone * 2; // QR pattern + quiet zone -- always this size, regardless of Outline
+  // qrClipProfile is a plain, NEVER-rounded square -- the QR mark below is
+  // always clipped against this, not the (possibly rounded) backing
+  // profile, so Corner radius can never crop into the pattern's own
+  // modules. The rounding itself is capped at the quiet zone's own width,
+  // so even at max it only ever eats into empty margin, never the code.
+  const qrClipProfile = arena.track(CrossSection.square([innerSide, innerSide], true));
+  const cornerRadius = Math.min(p.qrCornerRadius || 0, quietZone);
+  const innerProfile = cornerRadius > 0 ? roundedRect(arena, innerSide, innerSide, cornerRadius) : qrClipProfile;
+  const isInlay = p.engraveStyle === 'inlay';
+
+  // Outline -- unlike Shape mode's trim (which erodes INWARD from a
+  // fixed, user-set overall size), QR's Outline grows OUTWARD from the
+  // QR+quiet-zone square instead. Eroding inward here would shrink the
+  // quiet zone every time Outline is turned on (or a thick enough Outline
+  // could eat into the QR pattern itself) -- growing outward keeps the
+  // scannable area completely untouched and just adds material around it.
+  const fillProfile = innerProfile;
+  let trimProfile = null;
+  let outerProfile = innerProfile; // true outer silhouette -- what mounting-loop/magnet-hole anchoring measures against
+  if (p.qrOutlineEnabled && p.qrOutlineThickness > 0.001) {
+    // 'Miter' join (not offsetOf()'s usual default 'Round') so a sharp,
+    // Corner-radius-0 backing grows into an equally sharp/pointy trim
+    // instead of the offset operation itself rounding the corners back
+    // off regardless of the Corner radius setting. Harmless on an already
+    // -rounded backing too -- a rounded corner is already many small
+    // straight segments, and mitering barely-non-collinear segments like
+    // that doesn't visibly change anything (no true sharp vertex to spike
+    // from), so it still grows into a smooth-looking rounded trim.
+    const grown = offsetOf(arena, innerProfile, p.qrOutlineThickness, 'Miter');
+    trimProfile = arena.track(grown.subtract(innerProfile));
+    outerProfile = grown;
+  }
+
+  let backingSolid = fillProfile ? arena.track(fillProfile.extrude(p.qrDepth)) : null;
+  let trimSolid = trimProfile ? arena.track(trimProfile.extrude(p.qrDepth)) : null;
+
+  // QR mark layer -- clipped to the plain, unrounded QR+quiet-zone square
+  // (qrClipProfile, not innerProfile), so an oversized pattern or an
+  // oddly-cropped imported image can't overhang even into the trim band,
+  // AND so Corner radius (which only shapes innerProfile) can never crop
+  // the pattern's own modules.
+  let qrSolid = null;
+  const qrResult = qrModulesToMmLoops(p);
+  if (qrResult && qrResult.loops.length > 0) {
+    let qr2D = arena.track(new CrossSection(qrResult.loops, 'NonZero'));
+    qr2D = arena.track(qr2D.intersect(qrClipProfile));
+    if (!qr2D.isEmpty()) {
+      if (isInlay) {
+        // Per-line depth doesn't apply in Inlay mode for text, and the
+        // same reasoning holds here -- always cut as deep as it safely
+        // can, leaving at least 0.2mm of solid material under the recess.
+        const depth = Math.max(0, p.qrDepth - 0.2);
+        if (depth > 0.001) {
+          const recessCut = arena.track(
+            arena.track(qr2D.extrude(depth + 0.2)).translate([0, 0, p.qrDepth - depth])
+          );
+          if (backingSolid) backingSolid = arena.track(backingSolid.subtract(recessCut));
+          if (trimSolid) trimSolid = arena.track(trimSolid.subtract(recessCut));
+          qrSolid = arena.track(
+            arena.track(qr2D.extrude(depth)).translate([0, 0, p.qrDepth - depth])
+          );
+        }
+      } else if (p.qrMarkDepth > 0.001) {
+        qrSolid = arena.track(
+          arena.track(qr2D.extrude(p.qrMarkDepth)).translate([0, 0, p.qrDepth])
+        );
+      }
+    }
+  }
+
+  // Caption text list -- built exactly like buildDieCutSign()'s text +
+  // outline (see that function for the fuller explanation of why each
+  // line's outline is grown from ITS OWN margin before combining, rather
+  // than combining letters first and growing the whole thing by one
+  // shared amount). Deliberately NOT clipped to or unioned with the QR
+  // pattern's own backing/trim -- a caption is a fully separate,
+  // self-supporting object with its own die-cut style backing, positioned
+  // independently, same as Die-cut Text mode's lines.
+  const traced = [];
+  for (const el of p.qrTextElements) {
+    if (!el.content || !el.content.trim()) continue;
+    const result = textToMmLoops(el.content, el.size, el.lineSpacing || 1, el.font, el.charSpacing || 0, el.lineAlign || 'left');
+    if (!result || result.loops.length === 0) continue;
+    traced.push({ el, loops: result.loops, width: result.width });
+  }
+  const offsetXById = computeLineOffsetX(p.qrLineAlign, traced);
+
+  const textElementsPositioned = [];
+  let combinedTextOutline2D = null;
+  for (const { el, loops } of traced) {
+    const offsetX = offsetXById.get(el.id);
+    let text2D = arena.track(new CrossSection(loops, 'EvenOdd'));
+    text2D = positionText2D(arena, text2D, offsetX, el.offsetY, el.rotation);
+    textElementsPositioned.push({ id: el.id, text2D, depth: el.depth, color: el.color });
+
+    const margin = el.outlineMargin || 0;
+    if (p.qrOutlineEnabled && margin > 0) {
+      const solidLocal = solidUnionOfLoops(arena, loops);
+      if (solidLocal) {
+        const grownLocal = offsetOf(arena, solidLocal, margin);
+        const grownPositioned = positionText2D(arena, grownLocal, offsetX, el.offsetY, el.rotation);
+        combinedTextOutline2D = combinedTextOutline2D
+          ? arena.track(CrossSection.union(combinedTextOutline2D, grownPositioned))
+          : grownPositioned;
+      }
+    }
+  }
+
+  let qrTextOutlineSolid = null;
+  if (combinedTextOutline2D && p.qrDepth > 0.001) {
+    qrTextOutlineSolid = arena.track(combinedTextOutline2D.extrude(p.qrDepth));
+  }
+
+  // Inlay only makes sense when there's actually a caption backing to cut
+  // the recess into -- same fallback-to-emboss reasoning as
+  // buildDieCutSign() when its own Outline is off.
+  const captionIsInlay = isInlay && qrTextOutlineSolid;
+  const textLayers = [];
+  for (const { id, text2D, depth, color } of textElementsPositioned) {
+    if (captionIsInlay) {
+      const cutDepth = Math.max(0, p.qrDepth - 0.2);
+      if (cutDepth <= 0.001) continue;
+      const recessCut = arena.track(
+        arena.track(text2D.extrude(cutDepth + 0.2)).translate([0, 0, p.qrDepth - cutDepth])
+      );
+      qrTextOutlineSolid = arena.track(qrTextOutlineSolid.subtract(recessCut));
+      const solid = arena.track(
+        arena.track(text2D.extrude(cutDepth)).translate([0, 0, p.qrDepth - cutDepth])
+      );
+      textLayers.push({ id, color, solid });
+    } else {
+      if (depth <= 0.001) continue;
+      const zBase = qrTextOutlineSolid ? p.qrDepth : 0;
+      const solid = arena.track(
+        arena.track(text2D.extrude(depth)).translate([0, 0, zBase])
+      );
+      textLayers.push({ id, color, solid });
+    }
+  }
+
+  // The caption's OWN outline can also collide with the QR mark itself,
+  // not just the backing/trim -- missed the first time through. In Inlay
+  // mode especially, qrSolid (the recessed QR insert) occupies the same
+  // z-range as qrTextOutlineSolid (both roughly qrDepth-ish down to the
+  // surface), so if the caption's outline footprint reaches into the QR
+  // pattern's own area, the two are genuinely coincident there, not just
+  // touching -- exactly the striped/flickering artifact showing QR modules
+  // bleeding through the outline. The QR mark wins here too (same
+  // reasoning as the letters below: never alter the scannable pattern).
+  if (qrSolid && qrTextOutlineSolid) {
+    qrTextOutlineSolid = arena.track(qrTextOutlineSolid.subtract(qrSolid));
+  }
+
+  // Carve the QR sign's own backing/trim wherever the caption's own
+  // backing (or, with no Outline, its bare floating letters) occupies the
+  // exact same space -- e.g. the caption dragged on top of the QR's
+  // backing plate. Without this, two independent, differently-colored
+  // solids can end up with truly coincident overlapping faces, which
+  // flicker (z-fight) in the viewport no matter how they're rendered. This
+  // is ordinary CSG subtraction, same "harmless no-op wherever there's no
+  // overlap" pattern as Magnet Holes elsewhere -- it only removes material
+  // where the two objects actually occupy the same space, so a caption
+  // sitting beside the QR code (the normal case) is completely unaffected.
+  // The caption "wins" the overlap (it's the one being placed on top), so
+  // it carves the QR backing/trim, not the other way around -- they stay
+  // two separate, independently colored/positioned objects; this just
+  // stops them from literally sharing volume.
+  if (qrTextOutlineSolid) {
+    if (backingSolid) backingSolid = arena.track(backingSolid.subtract(qrTextOutlineSolid));
+    if (trimSolid) trimSolid = arena.track(trimSolid.subtract(qrTextOutlineSolid));
+  }
+  for (const layer of textLayers) {
+    if (backingSolid) backingSolid = arena.track(backingSolid.subtract(layer.solid));
+    if (trimSolid) trimSolid = arena.track(trimSolid.subtract(layer.solid));
+    // A raised (Emboss) caption letter sits at the same height as the raised
+    // QR mark (both start at z = qrDepth) -- if a line is dragged directly
+    // onto the QR pattern itself rather than beside it, the QR mark wins
+    // (the letter gets carved back instead), so the scannable pattern's
+    // own modules are never the ones altered.
+    if (qrSolid) layer.solid = arena.track(layer.solid.subtract(qrSolid));
+  }
+
+  // Mounting loop -- same pattern as buildShapeSign(): fuses to the trim
+  // band when present (the loop sits right at the edge, where the trim
+  // actually is), else the fill.
+  if (trimSolid) {
+    trimSolid = addMountingLoop(
+      arena, trimSolid, p.qrMountingHoles, csBounds2D(outerProfile),
+      p.qrMountingLoopOuterD, p.qrMountingLoopHoleD,
+      p.qrMountingLoopOffsetX, p.qrMountingLoopOffsetY, p.qrDepth
+    );
+  } else if (backingSolid) {
+    backingSolid = addMountingLoop(
+      arena, backingSolid, p.qrMountingHoles, csBounds2D(outerProfile),
+      p.qrMountingLoopOuterD, p.qrMountingLoopHoleD,
+      p.qrMountingLoopOffsetX, p.qrMountingLoopOffsetY, p.qrDepth
+    );
+  }
+
+  // Magnet holes -- applied to the backing/trim AND the QR mark layer, so
+  // a hole deep enough to reach a raised or recessed QR module carves
+  // through it instead of leaving it bridging over the hole (same fix as
+  // Magnet Holes got for text elsewhere). NOT applied to the caption
+  // (qrTextOutlineSolid/textLayers) -- the caption is its own separate
+  // object, not anchored to the QR's own footprint, so a hole positioned
+  // against the QR's bounds has no reliable relationship to wherever the
+  // caption happens to be sitting.
+  const magnetBounds = csBounds2D(outerProfile);
+  backingSolid = subtractMagnetHoles(
+    arena, backingSolid, p.qrMagnetHoles, magnetBounds,
+    p.qrMagnetHoleDiameter, p.qrMagnetHoleOffsetX, p.qrMagnetHoleOffsetY, p.qrMagnetHoleDepth
+  );
+  trimSolid = subtractMagnetHoles(
+    arena, trimSolid, p.qrMagnetHoles, magnetBounds,
+    p.qrMagnetHoleDiameter, p.qrMagnetHoleOffsetX, p.qrMagnetHoleOffsetY, p.qrMagnetHoleDepth
+  );
+  if (qrSolid) {
+    qrSolid = subtractMagnetHoles(
+      arena, qrSolid, p.qrMagnetHoles, magnetBounds,
+      p.qrMagnetHoleDiameter, p.qrMagnetHoleOffsetX, p.qrMagnetHoleOffsetY, p.qrMagnetHoleDepth
+    );
+  }
+
+  return { backingSolid, trimSolid, qrSolid, textLayers, qrTextOutlineSolid };
 }
 
 // ---------------------------------------------------------------------
@@ -1355,15 +1949,41 @@ let firstBuildFramed = false;
 function rebuild() {
   if (!Manifold) return;
 
+  // Cheap no-op unless params.qrImportedImageDataUrl just changed -- kicks
+  // off an async decode and calls rebuild() again once it resolves, same
+  // as loadCustomFonts() does for web fonts.
+  syncQrImportedImage();
+
   const arena = makeArena();
   const parts = [];
 
-  const dragArrayKey = params.mode === 'dieCut' ? 'dieCutTextElements' : 'textElements';
+  const dragArrayKey = params.mode === 'dieCut' ? 'dieCutTextElements'
+    : params.mode === 'qrCode' ? 'qrTextElements'
+    : 'textElements';
 
   if (params.mode === 'dieCut') {
     const { textLayers, outlineSolid } = buildDieCutSign(arena, params);
     if (outlineSolid && !outlineSolid.isEmpty()) {
       parts.push({ name: 'outline', hex: params.dieCutOutlineColor, manifold: outlineSolid });
+    }
+    textLayers.forEach((layer, i) => {
+      if (!layer.solid.isEmpty()) {
+        parts.push({ name: `text-${i + 1}`, hex: layer.color, manifold: layer.solid, elementId: layer.id });
+      }
+    });
+  } else if (params.mode === 'qrCode') {
+    const { backingSolid, trimSolid, qrSolid, textLayers, qrTextOutlineSolid } = buildQrSign(arena, params);
+    if (backingSolid && !backingSolid.isEmpty()) {
+      parts.push({ name: 'backing', hex: params.qrBackingColor, manifold: backingSolid });
+    }
+    if (trimSolid && !trimSolid.isEmpty()) {
+      parts.push({ name: 'trim', hex: params.qrOutlineColor, manifold: trimSolid });
+    }
+    if (qrSolid && !qrSolid.isEmpty()) {
+      parts.push({ name: 'qr', hex: params.qrColor, manifold: qrSolid });
+    }
+    if (qrTextOutlineSolid && !qrTextOutlineSolid.isEmpty()) {
+      parts.push({ name: 'text-outline', hex: params.qrOutlineColor, manifold: qrTextOutlineSolid });
     }
     textLayers.forEach((layer, i) => {
       if (!layer.solid.isEmpty()) {
@@ -1806,16 +2426,46 @@ const SLIDER_DEFS = {
   'group-dieCutMountingHoles': [
     { key: 'dieCutMountingLoopOuterD', label: 'Loop outer diameter', min: 8, max: 30, step: 0.5, unit: 'mm' },
     { key: 'dieCutMountingLoopHoleD', label: 'Loop hole diameter', min: 3, max: 15, step: 0.5, unit: 'mm' },
-    { key: 'dieCutMountingLoopMargin', label: 'Corner loop position (from side edge)', min: 3, max: 40, step: 0.5, unit: 'mm' },
     { key: 'dieCutMountingLoopOffsetX', label: 'Fine position (left/right)', min: -30, max: 30, step: 0.5, unit: 'mm', dir: 'x' },
     { key: 'dieCutMountingLoopOffsetY', label: 'Fine position (up/down)', min: -30, max: 30, step: 0.5, unit: 'mm', dir: 'y' },
   ],
   'group-shapeMountingHoles': [
     { key: 'shapeMountingLoopOuterD', label: 'Loop outer diameter', min: 8, max: 30, step: 0.5, unit: 'mm' },
     { key: 'shapeMountingLoopHoleD', label: 'Loop hole diameter', min: 3, max: 15, step: 0.5, unit: 'mm' },
-    { key: 'shapeMountingLoopMargin', label: 'Corner loop position (from side edge)', min: 3, max: 40, step: 0.5, unit: 'mm' },
     { key: 'shapeMountingLoopOffsetX', label: 'Fine position (left/right)', min: -30, max: 30, step: 0.5, unit: 'mm', dir: 'x' },
     { key: 'shapeMountingLoopOffsetY', label: 'Fine position (up/down)', min: -30, max: 30, step: 0.5, unit: 'mm', dir: 'y' },
+  ],
+  'group-dieCutMagnetHoles': [
+    { key: 'dieCutMagnetHoleDiameter', label: 'Hole diameter', min: 3, max: 20, step: 0.5, unit: 'mm' },
+    { key: 'dieCutMagnetHoleDepth', label: 'Hole depth (from the back)', min: 0.5, max: 20, step: 0.5, unit: 'mm' },
+    { key: 'dieCutMagnetHoleOffsetX', label: 'Fine position (left/right)', min: -30, max: 30, step: 0.5, unit: 'mm', dir: 'x' },
+    { key: 'dieCutMagnetHoleOffsetY', label: 'Fine position (up/down)', min: -30, max: 30, step: 0.5, unit: 'mm', dir: 'y' },
+  ],
+  'group-shapeMagnetHoles': [
+    { key: 'shapeMagnetHoleDiameter', label: 'Hole diameter', min: 3, max: 20, step: 0.5, unit: 'mm' },
+    { key: 'shapeMagnetHoleDepth', label: 'Hole depth (from the back)', min: 0.5, max: 20, step: 0.5, unit: 'mm' },
+    { key: 'shapeMagnetHoleOffsetX', label: 'Fine position (left/right)', min: -30, max: 30, step: 0.5, unit: 'mm', dir: 'x' },
+    { key: 'shapeMagnetHoleOffsetY', label: 'Fine position (up/down)', min: -30, max: 30, step: 0.5, unit: 'mm', dir: 'y' },
+  ],
+  'group-qrSize': [
+    { key: 'qrSize', label: 'Overall size', min: 20, max: 300, step: 1, unit: 'mm' },
+    { key: 'qrDepth', label: 'Sign thickness', min: 0.4, max: 15, step: 0.2, unit: 'mm' },
+  ],
+  'group-qrOutline': [
+    { key: 'qrOutlineThickness', label: 'Outline thickness', min: 1, max: 60, step: 0.5, unit: 'mm' },
+    { key: 'qrCornerRadius', label: 'Corner radius', min: 0, max: 60, step: 0.5, unit: 'mm' },
+  ],
+  'group-qrMountingHoles': [
+    { key: 'qrMountingLoopOuterD', label: 'Loop outer diameter', min: 8, max: 30, step: 0.5, unit: 'mm' },
+    { key: 'qrMountingLoopHoleD', label: 'Loop hole diameter', min: 3, max: 15, step: 0.5, unit: 'mm' },
+    { key: 'qrMountingLoopOffsetX', label: 'Fine position (left/right)', min: -30, max: 30, step: 0.5, unit: 'mm', dir: 'x' },
+    { key: 'qrMountingLoopOffsetY', label: 'Fine position (up/down)', min: -30, max: 30, step: 0.5, unit: 'mm', dir: 'y' },
+  ],
+  'group-qrMagnetHoles': [
+    { key: 'qrMagnetHoleDiameter', label: 'Hole diameter', min: 3, max: 20, step: 0.5, unit: 'mm' },
+    { key: 'qrMagnetHoleDepth', label: 'Hole depth (from the back)', min: 0.5, max: 20, step: 0.5, unit: 'mm' },
+    { key: 'qrMagnetHoleOffsetX', label: 'Fine position (left/right)', min: -30, max: 30, step: 0.5, unit: 'mm', dir: 'x' },
+    { key: 'qrMagnetHoleOffsetY', label: 'Fine position (up/down)', min: -30, max: 30, step: 0.5, unit: 'mm', dir: 'y' },
   ],
 };
 
@@ -1943,17 +2593,23 @@ function buildSliders() {
     if (!container) continue;
     container.innerHTML = '';
     for (const def of defs) {
-      const dieCutLoopKeys = ['dieCutMountingLoopOuterD', 'dieCutMountingLoopHoleD', 'dieCutMountingLoopMargin', 'dieCutMountingLoopOffsetX', 'dieCutMountingLoopOffsetY'];
-      const shapeLoopKeys = ['shapeMountingLoopOuterD', 'shapeMountingLoopHoleD', 'shapeMountingLoopMargin', 'shapeMountingLoopOffsetX', 'shapeMountingLoopOffsetY'];
+      const dieCutLoopKeys = ['dieCutMountingLoopOuterD', 'dieCutMountingLoopHoleD', 'dieCutMountingLoopOffsetX', 'dieCutMountingLoopOffsetY'];
+      const shapeLoopKeys = ['shapeMountingLoopOuterD', 'shapeMountingLoopHoleD', 'shapeMountingLoopOffsetX', 'shapeMountingLoopOffsetY'];
+      const dieCutMagnetKeys = ['dieCutMagnetHoleDiameter', 'dieCutMagnetHoleDepth', 'dieCutMagnetHoleOffsetX', 'dieCutMagnetHoleOffsetY'];
+      const shapeMagnetKeys = ['shapeMagnetHoleDiameter', 'shapeMagnetHoleDepth', 'shapeMagnetHoleOffsetX', 'shapeMagnetHoleOffsetY'];
+      const qrLoopKeys = ['qrMountingLoopOuterD', 'qrMountingLoopHoleD', 'qrMountingLoopOffsetX', 'qrMountingLoopOffsetY'];
+      const qrMagnetKeys = ['qrMagnetHoleDiameter', 'qrMagnetHoleDepth', 'qrMagnetHoleOffsetX', 'qrMagnetHoleOffsetY'];
       const disabled =
         (def.key === 'shapeHeight' && params.shapeType !== 'rectangle') ||
         (def.key === 'shapeCornerRadius' && params.shapeType !== 'square' && params.shapeType !== 'rectangle') ||
         (dieCutLoopKeys.includes(def.key) && (!params.dieCutOutlineEnabled || params.dieCutMountingHoles === 'none')) ||
-        // Margin (corner inset) only means something with two corner loops.
-        (def.key === 'dieCutMountingLoopMargin' && params.dieCutMountingHoles !== 'corners') ||
         (shapeLoopKeys.includes(def.key) && params.shapeMountingHoles === 'none') ||
-        (def.key === 'shapeMountingLoopMargin' && params.shapeMountingHoles !== 'corners') ||
-        (def.key === 'shapeOutlineThickness' && !params.shapeOutlineEnabled);
+        (def.key === 'shapeOutlineThickness' && !params.shapeOutlineEnabled) ||
+        (dieCutMagnetKeys.includes(def.key) && (!params.dieCutOutlineEnabled || params.dieCutMagnetHoles === 'none')) ||
+        (shapeMagnetKeys.includes(def.key) && params.shapeMagnetHoles === 'none') ||
+        (def.key === 'qrOutlineThickness' && !params.qrOutlineEnabled) ||
+        (qrLoopKeys.includes(def.key) && params.qrMountingHoles === 'none') ||
+        (qrMagnetKeys.includes(def.key) && params.qrMagnetHoles === 'none');
       const row = createSliderRow({
         label: typeof def.label === 'function' ? def.label() : def.label,
         min: def.min,
@@ -2009,9 +2665,13 @@ function buildTextElementList(config) {
     removeBtn.title = `Remove this ${entryLabel.toLowerCase()}`;
     removeBtn.setAttribute('aria-label', `Remove ${entryLabel.toLowerCase()} ${i + 1}`);
     removeBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
-    removeBtn.disabled = list.length <= 1;
+    // Most modes keep a floor of 1 (the mode's whole content IS its text
+    // list, so emptying it entirely doesn't make sense) -- QR mode's
+    // caption is optional on top of the QR code itself, so config.allowEmpty
+    // lets it go all the way down to 0 lines, re-addable via "+ Add text".
+    removeBtn.disabled = !config.allowEmpty && list.length <= 1;
     removeBtn.addEventListener('click', () => {
-      if (params[arrayKey].length <= 1) return;
+      if (!config.allowEmpty && params[arrayKey].length <= 1) return;
       const before = snapshotState();
       params[arrayKey] = params[arrayKey].filter((_, idx) => idx !== i);
       commitHistory(before);
@@ -2172,35 +2832,78 @@ function buildTextElementList(config) {
     alignRow.appendChild(alignToggle);
     entry.appendChild(alignRow);
 
-    // Die-cut mode only -- shape mode's backing IS the shape, so there's
-    // no per-line outline to grow. 0 = this line contributes no outline of
-    // its own (the master Outline on/off toggle still applies on top).
-    if (config.hasOutlineMargin) {
-      entry.appendChild(createSliderRow({
-        label: 'Outline thickness (this line)', min: 0, max: 40, step: 0.5, unit: 'mm',
-        getValue: () => params[arrayKey][i].outlineMargin || 0,
-        setValue: (v) => updateElementAt(arrayKey, i, { outlineMargin: v }),
-      }));
-    }
-
     container.appendChild(entry);
   });
 
   document.getElementById(addBtnId).disabled = list.length >= MAX_TEXT_ELEMENTS;
+
+  // Die-cut and QR modes only -- shape mode's backing IS the shape, so
+  // there's no per-line outline to grow. Lives in an Outline drawer on the
+  // right panel instead of inline per-line (used to be "Outline thickness
+  // (this line)" here), one slider per line, so it sits next to the master
+  // Outline on/off toggle it depends on rather than being scattered across
+  // however many line entries are in the list. Generic over config so both
+  // modes' text lists share one implementation.
+  if (config.hasOutlineMargin) buildOutlineMarginSliders(config);
+}
+
+function buildOutlineMarginSliders(config) {
+  const container = document.getElementById(config.outlineMarginContainerId);
+  if (!container) return;
+  container.innerHTML = '';
+  params[config.arrayKey].forEach((el, i) => {
+    container.appendChild(createSliderRow({
+      label: `Text ${i + 1} Outline`, min: 0, max: 40, step: 0.5, unit: 'mm',
+      getValue: () => params[config.arrayKey][i].outlineMargin || 0,
+      setValue: (v) => updateElementAt(config.arrayKey, i, { outlineMargin: v }),
+    }));
+  });
 }
 
 const shapeTextListConfig = { arrayKey: 'textElements', containerId: 'textElementList', addBtnId: 'addTextElementBtn', entryLabel: 'Text', defaultContent: 'MORE TEXT', alignParamKey: 'shapeLineAlign' };
-const dieCutTextListConfig = { arrayKey: 'dieCutTextElements', containerId: 'dieCutTextElementList', addBtnId: 'addDieCutTextElementBtn', entryLabel: 'Line', defaultContent: 'MORE TEXT', hasOutlineMargin: true, extraDefaults: { outlineMargin: 6 }, alignParamKey: 'dieCutLineAlign' };
+const dieCutTextListConfig = { arrayKey: 'dieCutTextElements', containerId: 'dieCutTextElementList', addBtnId: 'addDieCutTextElementBtn', entryLabel: 'Line', defaultContent: 'MORE TEXT', hasOutlineMargin: true, outlineMarginContainerId: 'group-dieCutTextOutlineMargins', extraDefaults: { outlineMargin: 6 }, alignParamKey: 'dieCutLineAlign' };
+// extraDefaultsFn (QR only): a new caption line defaults to sitting just
+// below the QR pattern's own footprint rather than dead-center on top of
+// it, where it would start out visually overlapping/fused with the QR
+// code -- computed from the CURRENT qrSize (not a fixed constant) so it
+// still lands clear of the code if the user resized it before adding a
+// line. Same idea as DEFAULTS.qrTextElements' own -49 default above, just
+// live instead of baked in.
+const qrTextListConfig = {
+  arrayKey: 'qrTextElements', containerId: 'qrTextElementList', addBtnId: 'addQrTextElementBtn',
+  entryLabel: 'Text', defaultContentFn: (list) => `Text ${list.length + 1}`, alignParamKey: 'qrLineAlign',
+  hasOutlineMargin: true, outlineMarginContainerId: 'group-qrTextOutlineMargins',
+  // The caption is optional on top of the QR code (which is the mode's
+  // real content) -- unlike Die-cut/Shape mode, where the text list IS
+  // the whole design, so it can go all the way down to 0 lines via the X
+  // button, re-addable with "+ Add text". buildQrSign() already handles
+  // an empty qrTextElements fine (same code path as every line being
+  // blank/empty content).
+  allowEmpty: true,
+  extraDefaults: { outlineMargin: 6 },
+  extraDefaultsFn: (p) => {
+    const quietZone = Math.max(3, (p.qrSize || 0) * 0.08);
+    const innerHalf = ((p.qrSize || 0) + quietZone * 2) / 2;
+    return { offsetY: -(innerHalf + 14) };
+  },
+};
 
 function buildShapeTextElementList() { buildTextElementList(shapeTextListConfig); }
 function buildDieCutTextElementList() { buildTextElementList(dieCutTextListConfig); }
+function buildQrTextElementList() { buildTextElementList(qrTextListConfig); }
 
 function addTextElement(config) {
-  if (params[config.arrayKey].length >= MAX_TEXT_ELEMENTS) return;
+  const list = params[config.arrayKey];
+  if (list.length >= MAX_TEXT_ELEMENTS) return;
   const before = snapshotState();
+  const dynamicDefaults = config.extraDefaultsFn ? config.extraDefaultsFn(params) : {};
+  // defaultContentFn (QR only) numbers each new line "Text N" to match its
+  // own entry header, rather than a single fixed placeholder string for
+  // every line the way Die-cut/Shape mode's "MORE TEXT" default works.
+  const content = config.defaultContentFn ? config.defaultContentFn(list) : config.defaultContent;
   params[config.arrayKey] = [
-    ...params[config.arrayKey],
-    makeDefaultTextElement({ content: config.defaultContent, ...(config.extraDefaults || {}) }),
+    ...list,
+    makeDefaultTextElement({ content, ...(config.extraDefaults || {}), ...dynamicDefaults }),
   ];
   commitHistory(before);
   buildTextElementList(config);
@@ -2209,6 +2912,7 @@ function addTextElement(config) {
 
 document.getElementById('addTextElementBtn').addEventListener('click', () => addTextElement(shapeTextListConfig));
 document.getElementById('addDieCutTextElementBtn').addEventListener('click', () => addTextElement(dieCutTextListConfig));
+document.getElementById('addQrTextElementBtn').addEventListener('click', () => addTextElement(qrTextListConfig));
 
 // ---------------------------------------------------------------------
 // Mode toggle
@@ -2218,22 +2922,39 @@ function setMode(mode, { record = true } = {}) {
   params.mode = mode;
   document.getElementById('dieCutModeBtn').classList.toggle('active', mode === 'dieCut');
   document.getElementById('shapeModeBtn').classList.toggle('active', mode === 'shape');
+  document.getElementById('qrModeBtn').classList.toggle('active', mode === 'qrCode');
   document.getElementById('dieCutPanel').style.display = mode === 'dieCut' ? '' : 'none';
   document.getElementById('shapePanel').style.display = mode === 'shape' ? '' : 'none';
+  // QR mode's own left-panel section (QR pattern source/color settings)
+  // plus its own separate Text panel (caption line list) -- two distinct
+  // top-level sections, not one nested under the other, same as Shape
+  // mode has its own "Shape size" panel separate from Text.
+  document.getElementById('qrPanel').style.display = mode === 'qrCode' ? '' : 'none';
+  document.getElementById('qrTextPanel').style.display = mode === 'qrCode' ? '' : 'none';
   // Outline (die-cut backing) lives in the right panel now, but it's still
   // die-cut-only -- Shape mode has its own backing (the shape itself), so
   // hide it there same as the other mode-specific panels above.
   document.getElementById('dieCutOutlinePanel').style.display = mode === 'dieCut' ? '' : 'none';
-  // Shape mode's own Outline (picture-frame trim) and Mounting Holes
-  // sections -- its backing is always the shape itself, so unlike
-  // die-cut's Mounting Holes toggle, neither ever needs to be greyed out.
+  // Shape mode's own Outline (picture-frame trim), Mounting Holes, and
+  // Magnet Holes sections -- its backing is always the shape itself, so
+  // unlike die-cut's toggles, none of these ever need to be greyed out.
   document.getElementById('shapeOutlinePanel').style.display = mode === 'shape' ? '' : 'none';
   document.getElementById('shapeMountingHolesPanel').style.display = mode === 'shape' ? '' : 'none';
+  document.getElementById('shapeMagnetHolesPanel').style.display = mode === 'shape' ? '' : 'none';
+  // QR mode's right-panel sections -- same "always has an effect, never
+  // greyed out" reasoning as shape mode's, since the QR backing plate
+  // always exists too. qrOutlinePanel's Outline drawer now covers both
+  // the QR pattern's own picture-frame trim AND the caption's own
+  // die-cut style backing (one shared toggle/color, see DEFAULTS.qrOutlineEnabled).
+  document.getElementById('qrOutlinePanel').style.display = mode === 'qrCode' ? '' : 'none';
+  document.getElementById('qrMountingHolesPanel').style.display = mode === 'qrCode' ? '' : 'none';
+  document.getElementById('qrMagnetHolesPanel').style.display = mode === 'qrCode' ? '' : 'none';
   if (record) commitHistory(before);
   rebuild();
 }
 document.getElementById('dieCutModeBtn').addEventListener('click', () => setMode('dieCut'));
 document.getElementById('shapeModeBtn').addEventListener('click', () => setMode('shape'));
+document.getElementById('qrModeBtn').addEventListener('click', () => setMode('qrCode'));
 
 // Applies to whichever mode is active -- see DEFAULTS.engraveStyle.
 function setEngraveStyle(style, { record = true } = {}) {
@@ -2247,6 +2968,7 @@ function setEngraveStyle(style, { record = true } = {}) {
   buildSliders();
   buildDieCutTextElementList();
   buildShapeTextElementList();
+  buildQrTextElementList();
   if (record) commitHistory(before);
   rebuild();
 }
@@ -2267,7 +2989,7 @@ function setDieCutOutlineEnabled(enabled) {
   params.dieCutOutlineEnabled = enabled;
   document.getElementById('dieCutOutlineOnBtn').classList.toggle('active', enabled);
   document.getElementById('dieCutOutlineOffBtn').classList.toggle('active', !enabled);
-  updateDieCutMountingHolesAvailability();
+  updateDieCutHoleAvailability();
   commitHistory(before);
   buildSliders();
   rebuild();
@@ -2296,6 +3018,94 @@ function setShapeOutlineEnabled(enabled) {
 }
 document.getElementById('shapeOutlineOnBtn').addEventListener('click', () => setShapeOutlineEnabled(true));
 document.getElementById('shapeOutlineOffBtn').addEventListener('click', () => setShapeOutlineEnabled(false));
+
+// ---------------------------------------------------------------------
+// QR mode's Outline -- ONE shared on/off + color that does double duty:
+// the QR pattern's own picture-frame trim (same pattern as shape mode's
+// Outline), AND the master toggle/color for the caption text list's own
+// die-cut style backing (see buildQrSign()'s use of p.qrOutlineEnabled/
+// qrOutlineColor for qrTextOutlineSolid, and buildOutlineMarginSliders()
+// below for the per-line "Text N Outline" sliders sharing this drawer).
+// ---------------------------------------------------------------------
+const qrOutlineColorEl = document.getElementById('qrOutlineColorInput');
+qrOutlineColorEl.addEventListener('input', () => { params.qrOutlineColor = qrOutlineColorEl.value; queueRebuild(); });
+qrOutlineColorEl.addEventListener('change', () => commitHistory(snapshotState()));
+
+function setQrOutlineEnabled(enabled) {
+  const before = snapshotState();
+  params.qrOutlineEnabled = enabled;
+  document.getElementById('qrOutlineOnBtn').classList.toggle('active', enabled);
+  document.getElementById('qrOutlineOffBtn').classList.toggle('active', !enabled);
+  commitHistory(before);
+  buildSliders();
+  rebuild();
+}
+document.getElementById('qrOutlineOnBtn').addEventListener('click', () => setQrOutlineEnabled(true));
+document.getElementById('qrOutlineOffBtn').addEventListener('click', () => setQrOutlineEnabled(false));
+
+// ---------------------------------------------------------------------
+// QR mode's content -- Generate (typed text/URL, encoded live via the
+// vendored qrcode-generator library) vs Import (an uploaded QR image,
+// traced the same way -- see qrModulesToMmLoops()). Color pickers for the
+// QR mark and backing plate live here too.
+// ---------------------------------------------------------------------
+function setQrContentSource(source) {
+  const before = snapshotState();
+  params.qrContentSource = source;
+  document.getElementById('qrContentSourceGenerateBtn').classList.toggle('active', source === 'generate');
+  document.getElementById('qrContentSourceImportBtn').classList.toggle('active', source === 'import');
+  document.getElementById('qrGenerateFields').style.display = source === 'generate' ? '' : 'none';
+  document.getElementById('qrImportFields').style.display = source === 'import' ? '' : 'none';
+  commitHistory(before);
+  rebuild();
+}
+document.getElementById('qrContentSourceGenerateBtn').addEventListener('click', () => setQrContentSource('generate'));
+document.getElementById('qrContentSourceImportBtn').addEventListener('click', () => setQrContentSource('import'));
+
+const qrContentInputEl = document.getElementById('qrContentInput');
+let qrContentDragSnapshot = null;
+qrContentInputEl.addEventListener('input', () => {
+  if (qrContentDragSnapshot === null) qrContentDragSnapshot = snapshotState();
+  params.qrContent = qrContentInputEl.value;
+  queueRebuild();
+});
+qrContentInputEl.addEventListener('change', () => {
+  if (qrContentDragSnapshot) { commitHistory(qrContentDragSnapshot); qrContentDragSnapshot = null; }
+});
+
+const qrErrorCorrectionEl = document.getElementById('qrErrorCorrectionSelect');
+qrErrorCorrectionEl.addEventListener('change', () => {
+  const before = snapshotState();
+  params.qrErrorCorrection = qrErrorCorrectionEl.value;
+  commitHistory(before);
+  rebuild();
+});
+
+const qrImportFileNameEl = document.getElementById('qrImportFileName');
+document.getElementById('qrImportFileBtn').addEventListener('click', () => {
+  document.getElementById('qrImportFileInput').click();
+});
+document.getElementById('qrImportFileInput').addEventListener('change', (ev) => {
+  const file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const before = snapshotState();
+    params.qrImportedImageDataUrl = reader.result;
+    qrImportFileNameEl.textContent = file.name;
+    commitHistory(before);
+    rebuild(); // kicks off syncQrImportedImage()'s async decode, then rebuilds again once it resolves
+  };
+  reader.readAsDataURL(file);
+});
+
+const qrColorEl = document.getElementById('qrColorInput');
+qrColorEl.addEventListener('input', () => { params.qrColor = qrColorEl.value; queueRebuild(); });
+qrColorEl.addEventListener('change', () => commitHistory(snapshotState()));
+
+const qrBackingColorEl = document.getElementById('qrBackingColorInput');
+qrBackingColorEl.addEventListener('input', () => { params.qrBackingColor = qrBackingColorEl.value; queueRebuild(); });
+qrBackingColorEl.addEventListener('change', () => commitHistory(snapshotState()));
 
 // ---------------------------------------------------------------------
 // "Align lines" -- ONE global Manual/Left/Center/Right toggle per mode's
@@ -2333,28 +3143,46 @@ function wireLineAlignToggle(paramKey, btnPrefix, config) {
 }
 wireLineAlignToggle('dieCutLineAlign', 'dieCutLineAlign', dieCutTextListConfig);
 wireLineAlignToggle('shapeLineAlign', 'shapeLineAlign', shapeTextListConfig);
+wireLineAlignToggle('qrLineAlign', 'qrLineAlign', qrTextListConfig);
 
-// Re-syncs both toggle groups' active state from params -- needed anywhere
-// params can change out from under the buttons without going through
-// setLineAlign() itself (undo/redo, project load, initial boot restore).
+// Re-syncs all three toggle groups' active state from params -- needed
+// anywhere params can change out from under the buttons without going
+// through setLineAlign() itself (undo/redo, project load, initial boot
+// restore).
 function syncLineAlignButtons() {
   for (const value of LINE_ALIGN_VALUES) {
     document.getElementById(`dieCutLineAlign${capitalize(value)}Btn`).classList.toggle('active', value === params.dieCutLineAlign);
     document.getElementById(`shapeLineAlign${capitalize(value)}Btn`).classList.toggle('active', value === params.shapeLineAlign);
+    document.getElementById(`qrLineAlign${capitalize(value)}Btn`).classList.toggle('active', value === params.qrLineAlign);
   }
 }
 
 // ---------------------------------------------------------------------
-// Mounting holes -- ONE None/Corners/Center toggle per mode (see
-// DEFAULTS.dieCutMountingHoles / shapeMountingHoles + addMountingLoop in
-// the geometry code). Mirrors the "Align lines" toggle wiring above.
+// Hole placement -- ONE None/Corners/Center toggle per mode PER hole
+// feature (see DEFAULTS.dieCutMountingHoles / shapeMountingHoles /
+// dieCutMagnetHoles / shapeMagnetHoles + addMountingLoop/
+// subtractMagnetHoles in the geometry code). Both features share the same
+// three-way placement idea, so the wiring is generic over a config list
+// instead of copy-pasted per feature. Mirrors the "Align lines" toggle
+// wiring above.
 // ---------------------------------------------------------------------
-const MOUNTING_HOLES_VALUES = ['none', 'corners', 'center'];
+const HOLE_PLACEMENT_VALUES = ['none', 'corners', 'center'];
+// Every hole-placement toggle group in the UI, keyed by its params field
+// and its button-id prefix (same string for every feature added so far,
+// but kept separate in case that ever needs to diverge).
+const HOLE_PLACEMENT_CONFIGS = [
+  { paramKey: 'dieCutMountingHoles', btnPrefix: 'dieCutMountingHoles' },
+  { paramKey: 'shapeMountingHoles', btnPrefix: 'shapeMountingHoles' },
+  { paramKey: 'dieCutMagnetHoles', btnPrefix: 'dieCutMagnetHoles' },
+  { paramKey: 'shapeMagnetHoles', btnPrefix: 'shapeMagnetHoles' },
+  { paramKey: 'qrMountingHoles', btnPrefix: 'qrMountingHoles' },
+  { paramKey: 'qrMagnetHoles', btnPrefix: 'qrMagnetHoles' },
+];
 
-function setMountingHoles(paramKey, mode, btnPrefix) {
+function setHolePlacement(paramKey, mode, btnPrefix) {
   const before = snapshotState();
   params[paramKey] = mode;
-  for (const value of MOUNTING_HOLES_VALUES) {
+  for (const value of HOLE_PLACEMENT_VALUES) {
     document.getElementById(`${btnPrefix}${capitalize(value)}Btn`).classList.toggle('active', value === mode);
   }
   commitHistory(before);
@@ -2362,32 +3190,39 @@ function setMountingHoles(paramKey, mode, btnPrefix) {
   rebuild();
 }
 
-function wireMountingHolesToggle(paramKey, btnPrefix) {
-  for (const value of MOUNTING_HOLES_VALUES) {
+function wireHolePlacementToggle(paramKey, btnPrefix) {
+  for (const value of HOLE_PLACEMENT_VALUES) {
     document.getElementById(`${btnPrefix}${capitalize(value)}Btn`)
-      .addEventListener('click', () => setMountingHoles(paramKey, value, btnPrefix));
+      .addEventListener('click', () => setHolePlacement(paramKey, value, btnPrefix));
   }
 }
-wireMountingHolesToggle('dieCutMountingHoles', 'dieCutMountingHoles');
-wireMountingHolesToggle('shapeMountingHoles', 'shapeMountingHoles');
+for (const { paramKey, btnPrefix } of HOLE_PLACEMENT_CONFIGS) wireHolePlacementToggle(paramKey, btnPrefix);
 
-function syncMountingHolesButtons() {
-  for (const value of MOUNTING_HOLES_VALUES) {
-    document.getElementById(`dieCutMountingHoles${capitalize(value)}Btn`).classList.toggle('active', value === params.dieCutMountingHoles);
-    document.getElementById(`shapeMountingHoles${capitalize(value)}Btn`).classList.toggle('active', value === params.shapeMountingHoles);
+// Re-syncs every hole-placement toggle group's active state from params --
+// needed anywhere params can change out from under the buttons without
+// going through setHolePlacement() itself (undo/redo, project load,
+// initial boot restore).
+function syncHolePlacementButtons() {
+  for (const { paramKey, btnPrefix } of HOLE_PLACEMENT_CONFIGS) {
+    for (const value of HOLE_PLACEMENT_VALUES) {
+      document.getElementById(`${btnPrefix}${capitalize(value)}Btn`).classList.toggle('active', value === params[paramKey]);
+    }
   }
 }
 
-// Die-cut mounting holes only mean something with a backing to cut into
-// (dieCutOutlineEnabled) -- greys out the whole toggle otherwise, same
-// visual treatment as a disabled slider, rather than silently ignoring
-// clicks or resetting the stored choice.
-function updateDieCutMountingHolesAvailability() {
+// Die-cut Mounting Holes AND Magnet Holes only mean something with a
+// backing to cut into/fuse onto (dieCutOutlineEnabled) -- greys out both
+// toggles otherwise, same visual treatment as a disabled slider, rather
+// than silently ignoring clicks or resetting the stored choice. Shape
+// mode's own backing always exists, so its two toggles never need this.
+function updateDieCutHoleAvailability() {
   const available = params.dieCutOutlineEnabled;
-  for (const value of MOUNTING_HOLES_VALUES) {
-    document.getElementById(`dieCutMountingHoles${capitalize(value)}Btn`).disabled = !available;
+  for (const btnPrefix of ['dieCutMountingHoles', 'dieCutMagnetHoles']) {
+    for (const value of HOLE_PLACEMENT_VALUES) {
+      document.getElementById(`${btnPrefix}${capitalize(value)}Btn`).disabled = !available;
+    }
+    document.getElementById(`${btnPrefix}Toggle`).classList.toggle('is-disabled', !available);
   }
-  document.getElementById('dieCutMountingHolesToggle').classList.toggle('is-disabled', !available);
 }
 
 // ---------------------------------------------------------------------
@@ -2459,6 +3294,25 @@ function commitHistory(before) {
   updateUndoRedoButtons();
 }
 
+// Re-syncs every QR-mode input from params -- needed anywhere params can
+// change out from under them without going through their own change
+// handlers (undo/redo, project load, initial boot restore), same
+// reasoning as syncHolePlacementButtons()/syncLineAlignButtons().
+function syncQrPanelFromParams() {
+  qrOutlineColorEl.value = params.qrOutlineColor;
+  document.getElementById('qrOutlineOnBtn').classList.toggle('active', params.qrOutlineEnabled);
+  document.getElementById('qrOutlineOffBtn').classList.toggle('active', !params.qrOutlineEnabled);
+  document.getElementById('qrContentSourceGenerateBtn').classList.toggle('active', params.qrContentSource === 'generate');
+  document.getElementById('qrContentSourceImportBtn').classList.toggle('active', params.qrContentSource === 'import');
+  document.getElementById('qrGenerateFields').style.display = params.qrContentSource === 'generate' ? '' : 'none';
+  document.getElementById('qrImportFields').style.display = params.qrContentSource === 'import' ? '' : 'none';
+  qrContentInputEl.value = params.qrContent || '';
+  qrErrorCorrectionEl.value = params.qrErrorCorrection || 'M';
+  qrColorEl.value = params.qrColor;
+  qrBackingColorEl.value = params.qrBackingColor;
+  qrImportFileNameEl.textContent = params.qrImportedImageDataUrl ? 'Image loaded.' : 'No file selected.';
+}
+
 function applySnapshot(snap) {
   params = cloneParams(snap.params);
   dieCutOutlineColorEl.value = params.dieCutOutlineColor;
@@ -2470,13 +3324,15 @@ function applySnapshot(snap) {
   document.getElementById('engraveEmbossBtn').classList.toggle('active', params.engraveStyle === 'emboss');
   document.getElementById('engraveInlayBtn').classList.toggle('active', params.engraveStyle === 'inlay');
   syncLineAlignButtons();
-  syncMountingHolesButtons();
-  updateDieCutMountingHolesAvailability();
+  syncHolePlacementButtons();
+  updateDieCutHoleAvailability();
   shapeColorEl.value = params.shapeColor;
+  syncQrPanelFromParams();
   renderShapeLibrary();
   buildSliders();
   buildDieCutTextElementList();
   buildShapeTextElementList();
+  buildQrTextElementList();
   // setMode() also syncs the mode-toggle buttons/panel visibility and does
   // the one rebuild() this needs -- called last so it rebuilds against the
   // fully-restored params/UI state above, not a half-updated one.
@@ -2530,15 +3386,28 @@ document.getElementById('saveProjectBtn').addEventListener('click', () => {
 });
 
 // Fills in any array fields a project/autosave file predates or is missing
-// (e.g. an autosave from before dieCutTextElements existed) with a single
-// default entry, same "defensive against an older/hand-edited file" idea
-// as the reference project's enforceButtonCountRestriction().
+// (e.g. an autosave from before dieCutTextElements existed), same
+// "defensive against an older/hand-edited file" idea as the reference
+// project's enforceButtonCountRestriction(). Die-cut/Shape mode get a
+// single default entry (their text list can't go below 1); QR mode's
+// caption defaults to empty, matching DEFAULTS.qrTextElements.
 function sanitizeLoadedParams(loaded) {
   if (!loaded.textElements || loaded.textElements.length === 0) {
     loaded.textElements = [makeDefaultTextElement()];
   }
   if (!loaded.dieCutTextElements || loaded.dieCutTextElements.length === 0) {
     loaded.dieCutTextElements = [makeDefaultTextElement()];
+  }
+  // qrTextElements can legitimately be an empty array (the caption is
+  // optional, removable all the way down to 0 lines -- see
+  // qrTextListConfig.allowEmpty), so only fill in a default when the
+  // field is MISSING entirely (an old save from before captions existed),
+  // not when it's present-but-empty (the user's own deliberate choice).
+  // An old save from before QR captions existed never had one -- default
+  // to empty (matching DEFAULTS.qrTextElements) rather than retroactively
+  // inventing a line the user's original design never had.
+  if (!loaded.qrTextElements) {
+    loaded.qrTextElements = [];
   }
   return loaded;
 }
@@ -2646,13 +3515,15 @@ async function main() {
   document.getElementById('engraveEmbossBtn').classList.toggle('active', params.engraveStyle === 'emboss');
   document.getElementById('engraveInlayBtn').classList.toggle('active', params.engraveStyle === 'inlay');
   syncLineAlignButtons();
-  syncMountingHolesButtons();
-  updateDieCutMountingHolesAvailability();
+  syncHolePlacementButtons();
+  updateDieCutHoleAvailability();
   shapeColorEl.value = params.shapeColor;
+  syncQrPanelFromParams();
   renderShapeLibrary();
   buildSliders();
   buildDieCutTextElementList();
   buildShapeTextElementList();
+  buildQrTextElementList();
   updateUndoRedoButtons();
 
   try {

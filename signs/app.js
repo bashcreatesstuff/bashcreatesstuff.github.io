@@ -217,6 +217,27 @@ const DEFAULTS = {
   shapeMagnetHoleOffsetX: 0,  // mm, mirrored for 'corners' -- see dieCutMagnetHoleOffsetX above
   shapeMagnetHoleOffsetY: 0,  // mm
 
+  // Logo overlay -- independent of shapeType, places the SAME imported
+  // logo's color layers on top of whatever backing shape is currently
+  // picked (square/rectangle/circle/heart/star/hexagon/cross), sized/
+  // positioned/rotated on its own and clipped to the shape's own
+  // footprint, same clipping buildShapeSign() already does for text.
+  shapeLogoEnabled: false,
+  shapeLogoSize: 40,      // mm, same "circumscribed circle diameter"
+                          // convention as logoSize (Logo mode) below
+  shapeLogoOffsetX: 0,    // mm, relative to the shape's own center
+  shapeLogoOffsetY: 0,    // mm
+  shapeLogoRotation: 0,   // degrees
+  shapeLogoDepth: 2,      // mm, emboss height (ignored in Inlay mode)
+
+  // Shared by every place a logo can be imported (Shape mode's overlay
+  // above, Logo mode below) -- how many distinct print-color regions to
+  // detect. Only affects PNG import (color k-means clustering); SVG
+  // import already groups by each shape's own fill color instead. Read
+  // at import time only -- changing this slider re-clusters the NEXT PNG
+  // chosen, not the currently-imported logo.
+  logoColorCount: 3,
+
   // ---- QR Code + Text mode ----
   // A third mode. 'generate' encodes qrContent live via the vendored
   // qrcode-generator library; 'import' traces an uploaded QR image the
@@ -281,6 +302,48 @@ const DEFAULTS = {
   qrMagnetHoleDepth: 2,    // mm, cut depth from the back face
   qrMagnetHoleOffsetX: 0,  // mm, mirrored for 'corners'
   qrMagnetHoleOffsetY: 0,  // mm
+
+  // ---- Logo mode ----
+  // A single imported logo IS the whole design here (see importedLogo
+  // state + the Logo import section below), the same way a picked shape
+  // is Shape mode's whole design or a QR pattern is QR mode's: the logo's
+  // own silhouette (grown by logoOutlineMargin) is the die-cut backing,
+  // logoOutlineDepth thick, and its detected color layers sit on top as
+  // emboss/inlay layers -- see buildLogoSign(). No text list; a caption
+  // belongs in Die-cut Text mode instead. logoColorCount above (shared
+  // with Shape mode's overlay) controls PNG color detection here too.
+  logoOutlineMargin: 6,   // mm, grows the logo's own silhouette into the
+                          // die-cut backing (0 = backing hugs the
+                          // silhouette exactly, same convention as each
+                          // die-cut text line's own outlineMargin)
+  logoCornerRadius: 0,    // mm, rounds every corner of the die-cut outline
+                          // (same erode-then-dilate roundCorners() helper
+                          // Shape mode's square/rectangle already use) --
+                          // applied to the outline only; colors are then
+                          // clipped to the rounded result so nothing
+                          // sticks out past a rounded-off corner
+  logoOutlineDepth: 2,    // mm, backing thickness
+  logoOutlineColor: '#7c6fe0',
+  logoSize: 60,           // mm, same "circumscribed circle diameter"
+                          // convention as shapeWidth -- independent of
+                          // the source image's own pixel size
+  logoOffsetX: 0,         // mm, moves the whole logo (backing + color
+                          // layers together) relative to plate center
+  logoOffsetY: 0,         // mm
+  logoRotation: 0,        // degrees
+  logoDepth: 2,           // mm, emboss height for the color layers
+                          // (ignored in Inlay mode, same convention as
+                          // die-cut text's per-line depth)
+  logoMountingHoles: 'none',
+  logoMountingLoopOuterD: 14, // mm
+  logoMountingLoopHoleD: 5,   // mm
+  logoMountingLoopOffsetX: 0, // mm, mirrored for 'corners'
+  logoMountingLoopOffsetY: 0, // mm
+  logoMagnetHoles: 'none',
+  logoMagnetHoleDiameter: 6, // mm
+  logoMagnetHoleDepth: 2,    // mm, cut depth from the back face
+  logoMagnetHoleOffsetX: 0,  // mm, mirrored for 'corners'
+  logoMagnetHoleOffsetY: 0,  // mm
 };
 
 function cloneParams(source) {
@@ -608,6 +671,324 @@ function textToMmLoops(text, sizeMm, lineSpacing, fontFamily, charSpacingMm, lin
     width: maxX - minX,
     height: maxY - minY,
   };
+}
+
+// ---------------------------------------------------------------------
+// Logo import (SVG / PNG -> normalized, per-color polygon loops) -- shared
+// by Die-cut Text mode (the logo's own silhouette can contribute to the
+// shared outline, exactly like each text line's own outlineMargin does --
+// see buildDieCutSign()) and Shape mode (the logo's color layers overlay
+// whatever backing shape is picked -- see buildShapeSign()). Reuses the
+// SAME alpha-mask marching-squares tracer textToMmLoops() above already
+// has (marchingSquaresTrace/simplifyLoop/traceMaskToPixelLoops) -- a real
+// uploaded image and a rendered line of text are both just "a mask to
+// trace" as far as that code cares.
+// ---------------------------------------------------------------------
+
+// Holds the currently-imported logo, or null if none has been loaded yet:
+// { outlineLoops, colorLayers: [{ hex, loops }], sourceName }. Lives
+// outside `params` (same reasoning as qrImportedImage below) since it's
+// derived data built from a File the browser handed us once -- but IS
+// included directly in undo/redo snapshots and Save/Load project JSON
+// (see snapshotState()/autosave() further down), since every loop is just
+// plain numbers and round-trips through JSON fine.
+let importedLogo = null;
+
+function rgbToHex([r, g, b]) {
+  const h = (v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0');
+  return `#${h(r)}${h(g)}${h(b)}`;
+}
+
+function rgbStringToHex(rgbStr) {
+  const m = rgbStr.match(/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/i);
+  if (!m) return '#000000';
+  return rgbToHex([Number(m[1]), Number(m[2]), Number(m[3])]);
+}
+
+// k-means over a deduped (color, count) palette rather than every pixel --
+// real logos are almost always flat-color, so this is both much faster and
+// avoids region-size effects destabilizing the centroids. k-means++
+// seeding spreads the initial centroids out so clustering doesn't just
+// collapse onto whichever color has the most pixels.
+function kmeansColors(paletteWithCounts, k, iterations = 20, seed = 1234) {
+  if (paletteWithCounts.length <= k) {
+    return paletteWithCounts.map((c) => ({ centroid: [c.r, c.g, c.b], members: [c] }));
+  }
+  let s = seed;
+  const rand = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+  const pts = paletteWithCounts;
+  const centroids = [pts[Math.floor(rand() * pts.length)]];
+  while (centroids.length < k) {
+    const d2 = pts.map((p) => {
+      let best = Infinity;
+      for (const c of centroids) {
+        const dr = p.r - c.r, dg = p.g - c.g, db = p.b - c.b;
+        best = Math.min(best, dr * dr + dg * dg + db * db);
+      }
+      return best;
+    });
+    const total = d2.reduce((a, b) => a + b, 0);
+    if (total === 0) { centroids.push(pts[Math.floor(rand() * pts.length)]); continue; }
+    let r = rand() * total, idx = 0;
+    for (; idx < pts.length; idx++) { r -= d2[idx]; if (r <= 0) break; }
+    centroids.push(pts[Math.min(idx, pts.length - 1)]);
+  }
+  let cent = centroids.map((c) => [c.r, c.g, c.b]);
+  let assign = new Array(pts.length).fill(0);
+  for (let iter = 0; iter < iterations; iter++) {
+    let changed = false;
+    for (let i = 0; i < pts.length; i++) {
+      let best = 0, bestD = Infinity;
+      for (let j = 0; j < cent.length; j++) {
+        const dr = pts[i].r - cent[j][0], dg = pts[i].g - cent[j][1], db = pts[i].b - cent[j][2];
+        const d = dr * dr + dg * dg + db * db;
+        if (d < bestD) { bestD = d; best = j; }
+      }
+      if (assign[i] !== best) changed = true;
+      assign[i] = best;
+    }
+    const sums = cent.map(() => [0, 0, 0, 0]);
+    for (let i = 0; i < pts.length; i++) {
+      const g = sums[assign[i]];
+      g[0] += pts[i].r * pts[i].count;
+      g[1] += pts[i].g * pts[i].count;
+      g[2] += pts[i].b * pts[i].count;
+      g[3] += pts[i].count;
+    }
+    cent = sums.map((g, j) => (g[3] > 0 ? [g[0] / g[3], g[1] / g[3], g[2] / g[3]] : cent[j]));
+    if (!changed) break;
+  }
+  const groups = cent.map(() => []);
+  for (let i = 0; i < pts.length; i++) groups[assign[i]].push(pts[i]);
+  return cent.map((c, j) => ({ centroid: c, members: groups[j] })).filter((g) => g.members.length > 0);
+}
+
+// Normalizes pixel-space loops (from either import path) into the shared
+// unit space this app's logo sizing uses: centered at the origin, scaled
+// so the bounding box's half-diagonal is 1 -- same "fits the circumscribed
+// circle" convention shapeWidth already uses for named shapes, so a
+// logo's Size slider means the same thing an outline diameter does
+// elsewhere. flipY is true for both PNG and SVG import (image-space Y
+// grows down) -- kept as a parameter rather than hard-coded so a future
+// non-image source doesn't silently inherit the flip.
+function normalizeImportedLoopSets(loopSets, bboxOverride, flipY = true) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  if (bboxOverride) {
+    [minX, minY, maxX, maxY] = bboxOverride;
+  } else {
+    for (const loops of loopSets) {
+      for (const loop of loops) {
+        for (const [x, y] of loop) {
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }
+      }
+    }
+  }
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  const halfDiag = Math.hypot((maxX - minX) / 2, (maxY - minY) / 2) || 1;
+  const ySign = flipY ? -1 : 1;
+  return loopSets.map((loops) =>
+    loops.map((loop) =>
+      loop.map(([x, y]) => [(x - cx) / halfDiag, ySign * (y - cy) / halfDiag])
+    )
+  );
+}
+
+// ---- PNG import -- traces the alpha-channel silhouette plus, separately,
+// each detected color region (via kmeansColors above) into its own set of
+// loops. ----
+async function importLogoFromPNG(file, colorCount) {
+  const bitmap = await createImageBitmap(file);
+  // Cap the tracing resolution -- high enough that rasterization staircase
+  // artifacts stay tiny relative to real features, low enough to keep
+  // marching-squares fast on a big source photo.
+  const TRACE_MAX = 700;
+  const scale = Math.min(1, TRACE_MAX / Math.max(bitmap.width, bitmap.height));
+  const w = Math.max(1, Math.round(bitmap.width * scale));
+  const h = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  const { data } = ctx.getImageData(0, 0, w, h);
+
+  const ALPHA_THRESHOLD = 128;
+  const alphaMask = new Uint8Array(w * h);
+  const paletteMap = new Map();
+  for (let i = 0; i < w * h; i++) {
+    const a = data[i * 4 + 3];
+    if (a < ALPHA_THRESHOLD) continue;
+    alphaMask[i] = 1;
+    const r = data[i * 4], g = data[i * 4 + 1], b = data[i * 4 + 2];
+    // Quantize slightly before dedup so anti-aliased near-duplicate shades
+    // collapse into the same palette entry instead of each being its own
+    // singleton (keeps the palette small enough for k-means to run on
+    // directly rather than needing a pre-clustering pass).
+    const qr = Math.round(r / 8) * 8, qg = Math.round(g / 8) * 8, qb = Math.round(b / 8) * 8;
+    const k = `${qr},${qg},${qb}`;
+    const entry = paletteMap.get(k);
+    if (entry) entry.count++;
+    else paletteMap.set(k, { r: qr, g: qg, b: qb, count: 1 });
+  }
+  const palette = [...paletteMap.values()];
+  if (palette.length === 0) throw new Error('Image has no visible (non-transparent) pixels.');
+
+  const minArea = Math.max(4, w * h * 0.00002);
+  const simplifyEps = Math.max(0.5, Math.max(w, h) / 400);
+
+  const outlinePixelLoops = traceMaskToPixelLoops(alphaMask, w, h, simplifyEps, minArea);
+
+  const k = Math.max(1, Math.min(colorCount, palette.length));
+  const groups = kmeansColors(palette, k)
+    // Biggest region first -- keeps the base/background color (almost
+    // always the largest) first in the list for a predictable preview.
+    .sort((a, b) => {
+      const ca = a.members.reduce((s, m) => s + m.count, 0);
+      const cb = b.members.reduce((s, m) => s + m.count, 0);
+      return cb - ca;
+    });
+
+  const memberKey = (m) => `${m.r},${m.g},${m.b}`;
+  const colorLayersPixel = groups.map((g) => {
+    const keys = new Set(g.members.map(memberKey));
+    const layerMask = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) {
+      if (!alphaMask[i]) continue;
+      const r = data[i * 4], gch = data[i * 4 + 1], b = data[i * 4 + 2];
+      const qr = Math.round(r / 8) * 8, qg = Math.round(gch / 8) * 8, qb = Math.round(b / 8) * 8;
+      if (keys.has(`${qr},${qg},${qb}`)) layerMask[i] = 1;
+    }
+    return {
+      hex: rgbToHex(g.centroid),
+      loops: traceMaskToPixelLoops(layerMask, w, h, simplifyEps, minArea),
+    };
+  }).filter((layer) => layer.loops.length > 0);
+
+  const [normOutline, ...normColorLoops] = normalizeImportedLoopSets(
+    [outlinePixelLoops, ...colorLayersPixel.map((l) => l.loops)],
+    [0, 0, w, h]
+  );
+
+  importedLogo = {
+    outlineLoops: normOutline,
+    colorLayers: colorLayersPixel.map((layer, i) => ({ hex: layer.hex, loops: normColorLoops[i] })),
+    sourceName: file.name,
+  };
+}
+
+// ---- SVG import -- uses the browser's native path-sampling API
+// (SVGGeometryElement.getPointAtLength) to convert arbitrary path data --
+// lines, curves, arcs -- into polygons exactly, without needing to
+// hand-roll a bezier flattener. Paths are grouped into color layers by
+// their resolved fill color; the union of every path (regardless of
+// color) becomes the outline. ----
+async function importLogoFromSVG(file) {
+  const text = await file.text();
+  const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+  if (doc.querySelector('parsererror')) throw new Error('Could not parse SVG file.');
+
+  // Render off-screen (not attached to the visible page) so
+  // getPointAtLength / getBBox / computed styles all work.
+  const host = document.createElement('div');
+  host.style.cssText = 'position:absolute;left:-99999px;top:-99999px;';
+  const svgEl = doc.documentElement;
+  document.body.appendChild(host);
+  host.appendChild(svgEl);
+
+  const shapeEls = [...svgEl.querySelectorAll('path, rect, circle, ellipse, polygon, polyline')];
+  if (shapeEls.length === 0) {
+    host.remove();
+    throw new Error('No drawable shapes found in this SVG.');
+  }
+
+  const bbox = svgEl.getBBox();
+  const SAMPLES_PER_UNIT = 0.8; // sample density along each subpath's length
+  const MIN_SAMPLES = 24;
+
+  function samplePoints(el, len) {
+    const n = Math.max(MIN_SAMPLES, Math.min(2000, Math.round(len * SAMPLES_PER_UNIT)));
+    const pts = [];
+    for (let i = 0; i < n; i++) pts.push(el.getPointAtLength((len * i) / n));
+    return pts.map((pt) => [pt.x, pt.y]);
+  }
+
+  // A single <path> can contain multiple subpaths (separate M/m moveto
+  // segments) -- e.g. a letter with a hole, or several disconnected shapes
+  // combined into one path for file-size reasons. Sampling the WHOLE path
+  // continuously with getPointAtLength would wrongly bridge the gap
+  // between subpaths into one loop. getPathData({normalize:true}) (SVG2,
+  // well-supported) resolves every segment to absolute coordinates first,
+  // so splitting on 'M' is always correct regardless of how the source
+  // file mixed relative/absolute commands.
+  function subpathElements(pathEl) {
+    if (typeof pathEl.getPathData !== 'function') return [pathEl]; // fallback
+    const segs = pathEl.getPathData({ normalize: true });
+    const groups = [];
+    for (const seg of segs) {
+      if (seg.type === 'M' || groups.length === 0) groups.push([]);
+      groups[groups.length - 1].push(seg);
+    }
+    return groups.map((segs) => {
+      const d = segs.map((s) => `${s.type}${s.values.join(',')}`).join(' ');
+      const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p.setAttribute('d', d);
+      pathEl.parentNode.insertBefore(p, pathEl);
+      return p;
+    });
+  }
+
+  const groupsByColor = new Map();
+  for (const el of shapeEls) {
+    const style = getComputedStyle(el);
+    let fill = style.fill;
+    if (!fill || fill === 'none') fill = el.getAttribute('fill') || '#000000';
+    const rgb = fill.startsWith('#') ? fill : rgbStringToHex(fill);
+
+    const subEls = el.tagName.toLowerCase() === 'path' ? subpathElements(el) : [el];
+    for (const subEl of subEls) {
+      let len;
+      try { len = subEl.getTotalLength(); } catch (e) { len = 0; }
+      if (len > 1e-6) {
+        const pts = samplePoints(subEl, len);
+        if (!groupsByColor.has(rgb)) groupsByColor.set(rgb, []);
+        groupsByColor.get(rgb).push(pts);
+      }
+      if (subEl !== el) subEl.remove(); // clean up temp subpath elements
+    }
+  }
+  host.remove();
+
+  if (groupsByColor.size === 0) throw new Error('Could not sample any shapes from this SVG.');
+
+  const simplifyEps = Math.max(bbox.width, bbox.height) / 800;
+  const colorLayersRaw = [...groupsByColor.entries()].map(([hex, loops]) => ({
+    hex,
+    loops: loops.map((l) => simplifyLoop(l, simplifyEps)).filter((l) => l.length >= 3),
+  })).filter((layer) => layer.loops.length > 0);
+
+  const outlineRaw = colorLayersRaw.flatMap((l) => l.loops);
+
+  const [normOutline, ...normColorLoops] = normalizeImportedLoopSets(
+    [outlineRaw, ...colorLayersRaw.map((l) => l.loops)],
+    [bbox.x, bbox.y, bbox.x + bbox.width, bbox.y + bbox.height]
+  );
+
+  importedLogo = {
+    outlineLoops: normOutline,
+    colorLayers: colorLayersRaw.map((layer, i) => ({ hex: layer.hex, loops: normColorLoops[i] })),
+    sourceName: file.name,
+  };
+}
+
+async function importLogoFile(file) {
+  const isSVG = file.type === 'image/svg+xml' || /\.svg$/i.test(file.name);
+  if (isSVG) {
+    await importLogoFromSVG(file);
+  } else {
+    await importLogoFromPNG(file, params.logoColorCount);
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -1158,6 +1539,169 @@ function buildDieCutSign(arena, p) {
 }
 
 // ---------------------------------------------------------------------
+// Logo mode -- a single imported logo IS the whole design, the same way a
+// picked shape is Shape mode's whole design or a QR pattern is QR mode's.
+// The logo's own silhouette (grown by logoOutlineMargin) is the die-cut
+// backing, and its detected color layers sit on top as emboss/inlay
+// layers -- same isInlay-gated mechanics as buildDieCutSign() above, just
+// for one object instead of a list, so there's no per-line alignment/
+// bounds bookkeeping needed.
+// ---------------------------------------------------------------------
+function buildLogoSign(arena, p) {
+  if (!importedLogo || importedLogo.colorLayers.length === 0 || (p.logoSize || 0) <= 0) {
+    return { layers: [], outlineSolid: null };
+  }
+
+  const R = p.logoSize / 2;
+  const offsetX = p.logoOffsetX || 0;
+  const offsetY = p.logoOffsetY || 0;
+  const rotation = p.logoRotation || 0;
+  const margin = p.logoOutlineMargin || 0;
+  const cornerRadius = p.logoCornerRadius || 0;
+
+  const outlineLoopsMm = importedLogo.outlineLoops.map((loop) => loop.map(([x, y]) => [x * R, y * R]));
+  const solidLocal = solidUnionOfLoops(arena, outlineLoopsMm);
+  // The TRUE logo silhouette, positioned but NOT grown by the Outline
+  // margin and NOT rounded -- used below so the biggest detected color
+  // can fill exactly this shape minus every other color, instead of
+  // relying on its own independently-traced boundary (see the
+  // "catch-all" comment further down).
+  const rawOutline2D = solidLocal ? positionText2D(arena, solidLocal, offsetX, offsetY, rotation) : null;
+  // The shape actually extruded into the die-cut backing: margin-grown,
+  // then corner-rounded (same erode-then-dilate roundCorners() helper
+  // Shape mode's square/rectangle use) -- kept separate from rawOutline2D
+  // above since the catch-all fill needs the TRUE, unrounded silhouette
+  // to compute correctly; every color gets clipped against THIS shape
+  // further down instead, so a rounded-off corner can't leave a color
+  // sticking out past the actual backing edge.
+  // Miter join here (not the default Round) -- offset()'s default join
+  // rounds every convex corner it grows regardless of Corner radius, which
+  // silently overrode Corner radius = 0 with rounded corners anyway (same
+  // bug QR mode's Outline trim had, fixed there the same way). Growing
+  // with sharp corners keeps the margin-grown shape's corners exactly as
+  // sharp as the traced silhouette's own, so Corner radius is the only
+  // thing that rounds anything off.
+  let combinedLocal = solidLocal ? (margin > 0 ? offsetOf(arena, solidLocal, margin, 'Miter') : solidLocal) : null;
+  if (combinedLocal && cornerRadius > 0) combinedLocal = roundCorners(arena, combinedLocal, cornerRadius);
+  const combinedOutline2D = combinedLocal ? positionText2D(arena, combinedLocal, offsetX, offsetY, rotation) : null;
+
+  let outlineSolid = null;
+  if (combinedOutline2D && p.logoOutlineDepth > 0.001) {
+    outlineSolid = arena.track(combinedOutline2D.extrude(p.logoOutlineDepth));
+  }
+
+  // Same "inlay only makes sense with a backing to cut into" fallback as
+  // buildDieCutSign() -- logoOutlineMargin at 0 with Outline depth also at
+  // 0 would leave nothing to recess into, so Inlay silently falls back to
+  // floating emboss in that edge case too.
+  const isInlay = p.engraveStyle === 'inlay' && outlineSolid;
+
+  // Pre-trace every color layer's own positioned 2D shape once, THEN
+  // replace the first one (for PNG import, already the biggest detected
+  // region -- almost always the background) with "whatever's left of the
+  // true logo silhouette after every OTHER color's own shape is
+  // subtracted". The master silhouette trace and each color's own trace
+  // come from different pixel masks, simplified independently -- even
+  // though the underlying pixel sets are a perfect partition, their
+  // simplified polygon boundaries rarely land on exactly the same
+  // vertices, which otherwise leaves a hairline sliver of Outline color
+  // visible right at the logo's own edge (and any concave notch in it)
+  // once every other color's recess has been cut. This only closes gaps
+  // against the RAW silhouette -- the Outline margin ring, if any, is
+  // untouched by it and still shows Outline color, same as documented.
+  // Deliberately NOT grown/overlapped against each other (see the
+  // earlier LOGO_LAYER_OVERLAP attempt, reverted after it caused
+  // z-fighting between adjacent colors) -- this closes the seam by
+  // construction instead, with zero overlap.
+  const layerShapes = importedLogo.colorLayers.map((layer) => {
+    if (!layer.loops || layer.loops.length === 0) return null;
+    const loopsMm = layer.loops.map((loop) => loop.map(([x, y]) => [x * R, y * R]));
+    const shape2D = positionText2D(arena, arena.track(new CrossSection(loopsMm, 'EvenOdd')), offsetX, offsetY, rotation);
+    return shape2D.isEmpty() ? null : shape2D;
+  });
+  if (rawOutline2D && layerShapes[0]) {
+    let others = null;
+    for (let i = 1; i < layerShapes.length; i++) {
+      if (!layerShapes[i]) continue;
+      others = others ? arena.track(CrossSection.union(others, layerShapes[i])) : layerShapes[i];
+    }
+    layerShapes[0] = others ? arena.track(rawOutline2D.subtract(others)) : rawOutline2D;
+  }
+
+  // Clip every color against the final outline shape -- a no-op unless
+  // Corner radius actually rounded something off, in which case this
+  // trims whichever color(s) reached a now-rounded corner so nothing
+  // sticks out past the actual backing edge.
+  if (combinedOutline2D) {
+    for (let i = 0; i < layerShapes.length; i++) {
+      if (!layerShapes[i]) continue;
+      const clipped = arena.track(layerShapes[i].intersect(combinedOutline2D));
+      layerShapes[i] = clipped.isEmpty() ? null : clipped;
+    }
+  }
+
+  const layers = [];
+  importedLogo.colorLayers.forEach((layer, i) => {
+    const layer2D = layerShapes[i];
+    if (!layer2D || layer2D.isEmpty()) return;
+
+    if (isInlay) {
+      // Cuts the FULL backing depth here, unlike buildDieCutSign()'s
+      // per-line text (small islands surrounded by a lot of otherwise-
+      // uncut backing, where leaving a shared 0.2mm floor keeps a letter's
+      // recess from opening an actual hole through the backing around
+      // it). A logo color region is different: it's always immediately
+      // backfilled by its OWN solid the instant it's recessed, and sits
+      // edge-to-edge against its neighbors (the rest of the logo's
+      // colors, or the Outline margin border) -- so there's no backing
+      // left "around" it that a full-depth cut could hole out, and no
+      // gap between colors that would leave a piece disconnected once
+      // printed. Cutting short here instead left a uniform strip of
+      // Outline color along the entire bottom edge/side walls, which is
+      // what this replaces.
+      const cutDepth = p.logoOutlineDepth;
+      const recessCut = arena.track(layer2D.extrude(cutDepth + 0.2));
+      outlineSolid = arena.track(outlineSolid.subtract(recessCut));
+      const solid = arena.track(layer2D.extrude(cutDepth));
+      layers.push({ id: null, color: layer.hex, solid });
+    } else {
+      if (p.logoDepth <= 0.001) return;
+      const zBase = outlineSolid ? p.logoOutlineDepth : 0;
+      const solid = arena.track(
+        arena.track(layer2D.extrude(p.logoDepth)).translate([0, 0, zBase])
+      );
+      layers.push({ id: null, color: layer.hex, solid });
+    }
+  });
+
+  // Mounting loop / magnet holes -- same mechanism as buildDieCutSign(),
+  // anchored to the logo's own (positioned) outline bounds since there's
+  // only ever one object here, not a "top line" to pick among several.
+  if (outlineSolid && combinedOutline2D) {
+    const bounds = csBounds2D(combinedOutline2D);
+    outlineSolid = addMountingLoop(
+      arena, outlineSolid, p.logoMountingHoles, bounds,
+      p.logoMountingLoopOuterD, p.logoMountingLoopHoleD,
+      p.logoMountingLoopOffsetX, p.logoMountingLoopOffsetY, p.logoOutlineDepth
+    );
+    outlineSolid = subtractMagnetHoles(
+      arena, outlineSolid, p.logoMagnetHoles, bounds,
+      p.logoMagnetHoleDiameter,
+      p.logoMagnetHoleOffsetX, p.logoMagnetHoleOffsetY, p.logoMagnetHoleDepth
+    );
+    for (const layer of layers) {
+      layer.solid = subtractMagnetHoles(
+        arena, layer.solid, p.logoMagnetHoles, bounds,
+        p.logoMagnetHoleDiameter,
+        p.logoMagnetHoleOffsetX, p.logoMagnetHoleOffsetY, p.logoMagnetHoleDepth
+      );
+    }
+  }
+
+  return { layers, outlineSolid };
+}
+
+// ---------------------------------------------------------------------
 // Shape + text mode -- a picked backing shape with one or more
 // independently-placed text elements sitting on top of it, each clipped
 // to the shape's own footprint so nothing can overhang the edge.
@@ -1237,6 +1781,77 @@ function buildShapeSign(arena, p) {
       );
       textLayers.push({ id: el.id, color: el.color, solid });
     }
+  }
+
+  // Logo overlay -- independent of shapeType, places the imported logo's
+  // color layers on top of whatever backing shape is currently picked,
+  // sized/positioned/rotated on its own and clipped to the shape's own
+  // footprint (same clipping the text loop above already does). Pushed
+  // into the SAME textLayers array so magnet-hole subtraction below picks
+  // it up for free, exactly like a line of text would.
+  if (p.shapeLogoEnabled && importedLogo && importedLogo.colorLayers.length > 0 && (p.shapeLogoSize || 0) > 0) {
+    const R = p.shapeLogoSize / 2;
+    const logoOffsetX = p.shapeLogoOffsetX || 0;
+    const logoOffsetY = p.shapeLogoOffsetY || 0;
+    const logoRotation = p.shapeLogoRotation || 0;
+
+    // The TRUE logo silhouette (unclipped) -- see buildLogoSign()'s
+    // matching comment: the biggest detected color (layer 0, for PNG
+    // import) fills whatever's left of this exact shape after every
+    // other color's own shape is subtracted, instead of relying on its
+    // own independently-traced boundary, which otherwise leaves a
+    // hairline sliver of the picked shape's own backing color visible
+    // right at the logo's outer edge.
+    const outlineLoopsMm = importedLogo.outlineLoops.map((loop) => loop.map(([x, y]) => [x * R, y * R]));
+    const rawOutlineLocal = solidUnionOfLoops(arena, outlineLoopsMm);
+    const rawOutline2D = rawOutlineLocal ? positionText2D(arena, rawOutlineLocal, logoOffsetX, logoOffsetY, logoRotation) : null;
+
+    const layerShapes = importedLogo.colorLayers.map((layer) => {
+      if (!layer.loops || layer.loops.length === 0) return null;
+      const loopsMm = layer.loops.map((loop) => loop.map(([x, y]) => [x * R, y * R]));
+      const shape2D = positionText2D(arena, arena.track(new CrossSection(loopsMm, 'EvenOdd')), logoOffsetX, logoOffsetY, logoRotation);
+      return shape2D.isEmpty() ? null : shape2D;
+    });
+    if (rawOutline2D && layerShapes[0]) {
+      let others = null;
+      for (let i = 1; i < layerShapes.length; i++) {
+        if (!layerShapes[i]) continue;
+        others = others ? arena.track(CrossSection.union(others, layerShapes[i])) : layerShapes[i];
+      }
+      layerShapes[0] = others ? arena.track(rawOutline2D.subtract(others)) : rawOutline2D;
+    }
+
+    importedLogo.colorLayers.forEach((layer, i) => {
+      const layer2D = layerShapes[i];
+      if (!layer2D || layer2D.isEmpty()) return;
+      const clipped2D = arena.track(layer2D.intersect(backingProfile));
+      if (clipped2D.isEmpty()) return;
+
+      if (isInlay) {
+        // Cuts the FULL backing depth -- see the matching comment in
+        // buildLogoSign() for why a logo color region (always
+        // immediately backfilled by its own solid, always edge-to-edge
+        // against its neighbors) doesn't need the 0.2mm floor this
+        // mode's own TEXT recess (above) still reserves.
+        const depth = p.shapeDepth;
+        const recessCut = arena.track(clipped2D.extrude(depth + 0.2));
+        if (backingSolid) backingSolid = arena.track(backingSolid.subtract(recessCut));
+        if (trimSolid) trimSolid = arena.track(trimSolid.subtract(recessCut));
+        const solid = arena.track(clipped2D.extrude(depth));
+        // Sentinel id (not a real text element's id) -- lets rebuild() tell
+        // a logo-overlay layer apart from an actual text element in this
+        // same textLayers array, so it can tag it as a drag target for the
+        // whole logo (shapeLogoOffsetX/Y) instead of one array element's
+        // own offsetX/Y.
+        textLayers.push({ id: '__shapeLogo__', color: layer.hex, solid });
+      } else {
+        if (p.shapeLogoDepth <= 0.001) return;
+        const solid = arena.track(
+          arena.track(clipped2D.extrude(p.shapeLogoDepth)).translate([0, 0, p.shapeDepth])
+        );
+        textLayers.push({ id: '__shapeLogo__', color: layer.hex, solid });
+      }
+    });
   }
 
   // Mounting loop fused onto the shape backing, if any -- the shape's own
@@ -1730,14 +2345,24 @@ renderer.domElement.addEventListener('click', (ev) => {
 });
 
 // ---------------------------------------------------------------------
-// Drag-to-move text elements directly in the 3D viewport. Text meshes are
-// tagged with userData.elementId/arrayKey in rebuild() (only text-layer
-// meshes get this -- outline/backing plates don't, so they're naturally
-// excluded from picking). Pointerdown picks a mesh via raycast, then drag
-// moves it across a flat plane at the point it was grabbed, converting
-// screen movement into offsetX/offsetY deltas -- same "live update while
-// dragging, one committed undo snapshot on release" convention already
-// used by the sliders (see createSliderRow's input/change split above).
+// Drag-to-move text elements AND the logo (Shape mode's overlay or
+// standalone Logo mode's own logo) directly in the 3D viewport. Meshes are
+// tagged with a userData.drag descriptor in rebuild() (only text-layer and
+// logo meshes get one -- outline/backing plates don't, so they're
+// naturally excluded from picking). Two kinds of descriptor:
+//   { kind: 'element', arrayKey, id } -- one entry in a params[] array
+//     (a line of text), same as this always worked.
+//   { kind: 'scalar', xKey, yKey, min, max } -- a single top-level params
+//     pair (the logo's own offsetX/offsetY), new for the logo. Every mesh
+//     belonging to the logo (its outline plus every color layer) shares
+//     the SAME scalar descriptor, so grabbing any one of them moves the
+//     whole logo together, the same way grabbing any letter moves its
+//     whole line.
+// Pointerdown picks a mesh via raycast, then drag moves it across a flat
+// plane at the point it was grabbed, converting screen movement into
+// offsetX/offsetY deltas -- same "live update while dragging, one
+// committed undo snapshot on release" convention already used by the
+// sliders (see createSliderRow's input/change split above).
 // ---------------------------------------------------------------------
 const POSITION_CONTAINER_ID = {
   dieCutTextElements: 'dieCutTextElementList',
@@ -1748,7 +2373,7 @@ const DRAG_OFFSET_RANGE = { min: -200, max: 200 }; // matches the Position slide
 const dragRaycaster = new THREE.Raycaster();
 const dragPlane = new THREE.Plane();
 const dragPlaneHit = new THREE.Vector3();
-let activeDrag = null; // { arrayKey, id, startSnapshot, lastPoint }
+let activeDrag = null; // { drag, startSnapshot, lastPoint, mesh }
 
 function pointerToNDC(ev) {
   const rect = renderer.domElement.getBoundingClientRect();
@@ -1772,9 +2397,17 @@ function pointerIsInsideViewCube(ev) {
 function pickDraggableMesh(ev) {
   const ndc = pointerToNDC(ev);
   dragRaycaster.setFromCamera(ndc, camera);
-  const draggable = currentMeshes.filter((m) => m.userData && m.userData.elementId);
+  const draggable = currentMeshes.filter((m) => m.userData && m.userData.drag);
   const hits = dragRaycaster.intersectObjects(draggable, false);
   return hits.length > 0 ? hits[0] : null;
+}
+
+// Two 'scalar'-kind descriptors are "the same drag target" if they point
+// at the same params keys (there's only ever one logo per mode, but this
+// keeps the fresh-mesh lookup below honest rather than assuming that).
+function dragTargetsMatch(a, b) {
+  if (!a || !b || a.kind !== b.kind) return false;
+  return a.kind === 'element' ? (a.arrayKey === b.arrayKey && a.id === b.id) : (a.xKey === b.xKey && a.yKey === b.yKey);
 }
 
 // Directly patches the already-rendered Position sliders' displayed value
@@ -1795,6 +2428,19 @@ function refreshPositionSliderDisplays(arrayKey, idx, offsetX, offsetY) {
   };
   setField('offsetX', offsetX);
   setField('offsetY', offsetY);
+}
+
+// Same idea as refreshPositionSliderDisplays above, but for a scalar drag
+// target's own generic SLIDER_DEFS-driven row (found via the `field`
+// dataset tag buildSliders() now stamps every row with -- see there),
+// rather than a per-text-element Position row scoped to one list entry.
+function refreshScalarSliderDisplay(key, value) {
+  const row = document.querySelector(`.slider-row[data-field="${key}"]`);
+  if (!row) return;
+  const input = row.querySelector('input[type="range"]');
+  const val = row.querySelector('.val');
+  if (input) input.value = value;
+  if (val) val.textContent = `${value} ${row.dataset.unit || ''}`.trim();
 }
 
 // Subtle emissive tint so it's visually obvious which line is draggable
@@ -1822,10 +2468,10 @@ renderer.domElement.addEventListener('pointerdown', (ev) => {
   if (ev.button !== 0 || pointerIsInsideViewCube(ev)) return;
   const hit = pickDraggableMesh(ev);
   if (!hit) return;
-  const { elementId, arrayKey } = hit.object.userData;
+  const { drag } = hit.object.userData;
   controls.enabled = false;
   dragPlane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 0, 1), hit.point);
-  activeDrag = { arrayKey, id: elementId, startSnapshot: snapshotState(), lastPoint: hit.point.clone(), mesh: hit.object };
+  activeDrag = { drag, startSnapshot: snapshotState(), lastPoint: hit.point.clone(), mesh: hit.object };
   setHighlighted(hit.object, true);
   renderer.domElement.setPointerCapture(ev.pointerId);
   renderer.domElement.style.cursor = 'grabbing';
@@ -1851,12 +2497,23 @@ renderer.domElement.addEventListener('pointermove', (ev) => {
   dragRaycaster.setFromCamera(ndc, camera);
   if (!dragRaycaster.ray.intersectPlane(dragPlane, dragPlaneHit)) return;
 
-  const list = params[activeDrag.arrayKey];
-  const idx = list.findIndex((t) => t.id === activeDrag.id);
-  if (idx === -1) { endDrag(false); return; } // element got removed mid-drag
+  const { drag } = activeDrag;
+  let idx = -1, curX, curY, range;
+  if (drag.kind === 'element') {
+    const list = params[drag.arrayKey];
+    idx = list.findIndex((t) => t.id === drag.id);
+    if (idx === -1) { endDrag(false); return; } // element got removed mid-drag
+    curX = list[idx].offsetX;
+    curY = list[idx].offsetY;
+    range = DRAG_OFFSET_RANGE;
+  } else {
+    curX = params[drag.xKey] || 0;
+    curY = params[drag.yKey] || 0;
+    range = { min: drag.min, max: drag.max };
+  }
 
   // Move by the delta since the last frame (not "snap origin to cursor") --
-  // this is what makes it work regardless of where on the letters you
+  // this is what makes it work regardless of where on the letters/logo you
   // grabbed, and stays correct even when the element itself is rotated,
   // since offsetX/offsetY are applied as a translation AFTER rotation in
   // positionText2D(), so a world-space delta always adds cleanly.
@@ -1865,8 +2522,7 @@ renderer.domElement.addEventListener('pointermove', (ev) => {
   activeDrag.lastPoint.copy(dragPlaneHit);
   if (dx === 0 && dy === 0) return;
 
-  const clamp = (v) => Math.min(DRAG_OFFSET_RANGE.max, Math.max(DRAG_OFFSET_RANGE.min, v));
-  const el = list[idx];
+  const clamp = (v) => Math.min(range.max, Math.max(range.min, v));
   // Round the WRITTEN value to 0.1mm (see round1() below) -- dragPlaneHit
   // comes from a raw 3D ray/plane intersection, so left unrounded,
   // offsetX/offsetY would pick up long floating-point tails (e.g.
@@ -1874,10 +2530,17 @@ renderer.domElement.addEventListener('pointermove', (ev) => {
   // activeDrag.lastPoint above stays at full precision for the frame-to-
   // frame delta math, so this doesn't affect drag smoothness -- only the
   // number that actually gets stored.
-  const newOffsetX = round1(clamp(el.offsetX + dx));
-  const newOffsetY = round1(clamp(el.offsetY + dy));
-  updateElementAt(activeDrag.arrayKey, idx, { offsetX: newOffsetX, offsetY: newOffsetY });
-  refreshPositionSliderDisplays(activeDrag.arrayKey, idx, newOffsetX, newOffsetY);
+  const newOffsetX = round1(clamp(curX + dx));
+  const newOffsetY = round1(clamp(curY + dy));
+  if (drag.kind === 'element') {
+    updateElementAt(drag.arrayKey, idx, { offsetX: newOffsetX, offsetY: newOffsetY });
+    refreshPositionSliderDisplays(drag.arrayKey, idx, newOffsetX, newOffsetY);
+  } else {
+    params[drag.xKey] = newOffsetX;
+    params[drag.yKey] = newOffsetY;
+    refreshScalarSliderDisplay(drag.xKey, newOffsetX);
+    refreshScalarSliderDisplay(drag.yKey, newOffsetY);
+  }
   queueRebuild();
 });
 
@@ -1960,6 +2623,15 @@ function rebuild() {
   const dragArrayKey = params.mode === 'dieCut' ? 'dieCutTextElements'
     : params.mode === 'qrCode' ? 'qrTextElements'
     : 'textElements';
+  // Drag target for the whole logo -- every mesh belonging to it (outline
+  // AND every color layer, in whichever mode) shares this one descriptor,
+  // so grabbing ANY of its meshes moves the entire logo together, same as
+  // grabbing any letter of a line of text moves that whole line (they all
+  // share one offsetX/offsetY under the hood too -- here it's a single
+  // top-level params pair instead of one array element's own fields, see
+  // the 'scalar' drag kind in the pointer handlers below).
+  const shapeLogoDrag = { kind: 'scalar', xKey: 'shapeLogoOffsetX', yKey: 'shapeLogoOffsetY', min: -100, max: 100 };
+  const logoDrag = { kind: 'scalar', xKey: 'logoOffsetX', yKey: 'logoOffsetY', min: -150, max: 150 };
 
   if (params.mode === 'dieCut') {
     const { textLayers, outlineSolid } = buildDieCutSign(arena, params);
@@ -1968,7 +2640,7 @@ function rebuild() {
     }
     textLayers.forEach((layer, i) => {
       if (!layer.solid.isEmpty()) {
-        parts.push({ name: `text-${i + 1}`, hex: layer.color, manifold: layer.solid, elementId: layer.id });
+        parts.push({ name: `text-${i + 1}`, hex: layer.color, manifold: layer.solid, drag: { kind: 'element', arrayKey: dragArrayKey, id: layer.id } });
       }
     });
   } else if (params.mode === 'qrCode') {
@@ -1987,10 +2659,10 @@ function rebuild() {
     }
     textLayers.forEach((layer, i) => {
       if (!layer.solid.isEmpty()) {
-        parts.push({ name: `text-${i + 1}`, hex: layer.color, manifold: layer.solid, elementId: layer.id });
+        parts.push({ name: `text-${i + 1}`, hex: layer.color, manifold: layer.solid, drag: { kind: 'element', arrayKey: dragArrayKey, id: layer.id } });
       }
     });
-  } else {
+  } else if (params.mode === 'shape') {
     const { backingSolid, trimSolid, textLayers } = buildShapeSign(arena, params);
     if (backingSolid && !backingSolid.isEmpty()) {
       parts.push({ name: 'backing', hex: params.shapeColor, manifold: backingSolid });
@@ -2000,7 +2672,21 @@ function rebuild() {
     }
     textLayers.forEach((layer, i) => {
       if (!layer.solid.isEmpty()) {
-        parts.push({ name: `text-${i + 1}`, hex: layer.color, manifold: layer.solid, elementId: layer.id });
+        // '__shapeLogo__' is the sentinel buildShapeSign() gives its logo-
+        // overlay layers (see there) to tell them apart from a real text
+        // element sharing this same array.
+        const drag = layer.id === '__shapeLogo__' ? shapeLogoDrag : { kind: 'element', arrayKey: dragArrayKey, id: layer.id };
+        parts.push({ name: `text-${i + 1}`, hex: layer.color, manifold: layer.solid, drag });
+      }
+    });
+  } else if (params.mode === 'logo') {
+    const { outlineSolid, layers } = buildLogoSign(arena, params);
+    if (outlineSolid && !outlineSolid.isEmpty()) {
+      parts.push({ name: 'outline', hex: params.logoOutlineColor, manifold: outlineSolid, drag: logoDrag });
+    }
+    layers.forEach((layer, i) => {
+      if (!layer.solid.isEmpty()) {
+        parts.push({ name: `logo-${i + 1}`, hex: layer.color, manifold: layer.solid, drag: logoDrag });
       }
     });
   }
@@ -2008,7 +2694,7 @@ function rebuild() {
   const geos = parts.map((pt) => ({
     name: pt.name,
     hex: pt.hex,
-    elementId: pt.elementId,
+    drag: pt.drag,
     geo: meshToGeometry(pt.manifold.getMesh()),
   }));
 
@@ -2020,15 +2706,16 @@ function rebuild() {
   currentMeshes = [];
   currentParts = [];
 
-  for (const { name, hex, geo, elementId } of geos) {
+  for (const { name, hex, geo, drag } of geos) {
     const mat = new THREE.MeshStandardMaterial({
       color: hex, metalness: 0, roughness: 0.75, flatShading: true,
     });
     const mesh = new THREE.Mesh(geo, mat);
-    // elementId is only set on text-layer parts (not outline/backing), so
-    // this also doubles as "is this mesh drag-pickable" -- see dragging
-    // handlers below, which only consider meshes with userData.elementId.
-    if (elementId) mesh.userData = { elementId, arrayKey: dragArrayKey };
+    // drag is only set on text-layer and logo parts (not the shape/QR
+    // backing/trim), so this also doubles as "is this mesh drag-pickable"
+    // -- see dragging handlers below, which only consider meshes with
+    // userData.drag.
+    if (drag) mesh.userData = { drag };
     scene.add(mesh);
     currentMeshes.push(mesh);
     currentParts.push({ name, hex, mesh });
@@ -2040,7 +2727,7 @@ function rebuild() {
   // highlight, otherwise the highlight silently vanishes after the first
   // rebuild mid-drag (the old, now-disposed mesh it was set on is gone).
   if (activeDrag) {
-    const freshMesh = currentMeshes.find((m) => m.userData && m.userData.elementId === activeDrag.id);
+    const freshMesh = currentMeshes.find((m) => m.userData && m.userData.drag && dragTargetsMatch(m.userData.drag, activeDrag.drag));
     if (freshMesh) {
       activeDrag.mesh = freshMesh;
       setHighlighted(freshMesh, true);
@@ -2052,7 +2739,9 @@ function rebuild() {
     firstBuildFramed = true;
   }
 
-  statusEl.textContent = currentMeshes.length ? 'Ready' : 'Nothing to show yet — add some text.';
+  statusEl.textContent = currentMeshes.length
+    ? 'Ready'
+    : params.mode === 'logo' ? 'Nothing to show yet — upload a logo.' : 'Nothing to show yet — add some text.';
   updateSizeReadout();
   autosave();
 }
@@ -2409,6 +3098,17 @@ document.getElementById('exportBtn').addEventListener('click', () => {
 // this slider alone isn't the total).
 const backingHeightLabel = () =>
   params.engraveStyle === 'inlay' ? 'Total thickness' : 'Backing thickness (text adds height on top)';
+const logoBackingHeightLabel = () =>
+  params.engraveStyle === 'inlay' ? 'Total thickness' : 'Backing thickness (logo colors add height on top)';
+// Same idea as the die-cut text list's own "Text height" slider -- Inlay
+// always cuts each color's recess as deep as it safely can (see
+// buildLogoSign()/buildShapeSign()'s isInlay branch), so this slider only
+// actually does anything in Emboss mode. Greyed out (and relabeled) in
+// Inlay instead of left live-but-ignored.
+const logoDepthLabel = () =>
+  params.engraveStyle === 'inlay' ? 'Emboss height (fixed by Inlay)' : 'Emboss height';
+const shapeLogoDepthLabel = () =>
+  params.engraveStyle === 'inlay' ? 'Emboss height (fixed by Inlay)' : 'Emboss height';
 
 const SLIDER_DEFS = {
   'group-dieCutOutline': [
@@ -2422,6 +3122,14 @@ const SLIDER_DEFS = {
   ],
   'group-shapeOutline': [
     { key: 'shapeOutlineThickness', label: 'Trim width', min: 1, max: 60, step: 0.5, unit: 'mm' },
+  ],
+  'group-shapeLogo': [
+    { key: 'logoColorCount', label: 'Colors to detect (PNG only)', min: 1, max: 8, step: 1, unit: '' },
+    { key: 'shapeLogoSize', label: 'Logo size', min: 5, max: 300, step: 1, unit: 'mm' },
+    { key: 'shapeLogoOffsetX', label: 'Position (left/right)', min: -100, max: 100, step: 0.5, unit: 'mm', dir: 'x' },
+    { key: 'shapeLogoOffsetY', label: 'Position (fwd/back)', min: -100, max: 100, step: 0.5, unit: 'mm', dir: 'y' },
+    { key: 'shapeLogoRotation', label: 'Rotation', min: -180, max: 180, step: 1, unit: '°' },
+    { key: 'shapeLogoDepth', label: shapeLogoDepthLabel, min: 0.2, max: 10, step: 0.1, unit: 'mm' },
   ],
   'group-dieCutMountingHoles': [
     { key: 'dieCutMountingLoopOuterD', label: 'Loop outer diameter', min: 8, max: 30, step: 0.5, unit: 'mm' },
@@ -2467,6 +3175,31 @@ const SLIDER_DEFS = {
     { key: 'qrMagnetHoleOffsetX', label: 'Fine position (left/right)', min: -30, max: 30, step: 0.5, unit: 'mm', dir: 'x' },
     { key: 'qrMagnetHoleOffsetY', label: 'Fine position (up/down)', min: -30, max: 30, step: 0.5, unit: 'mm', dir: 'y' },
   ],
+  'group-logoImport': [
+    { key: 'logoColorCount', label: 'Colors to detect (PNG only)', min: 1, max: 8, step: 1, unit: '' },
+  ],
+  'group-logoSize': [
+    { key: 'logoSize', label: 'Logo size', min: 5, max: 400, step: 1, unit: 'mm' },
+    { key: 'logoOffsetX', label: 'Position (left/right)', min: -150, max: 150, step: 0.5, unit: 'mm', dir: 'x' },
+    { key: 'logoOffsetY', label: 'Position (fwd/back)', min: -150, max: 150, step: 0.5, unit: 'mm', dir: 'y' },
+    { key: 'logoRotation', label: 'Rotation', min: -180, max: 180, step: 1, unit: '°' },
+    { key: 'logoOutlineMargin', label: 'Outline', min: 0, max: 30, step: 0.5, unit: 'mm' },
+    { key: 'logoCornerRadius', label: 'Corner radius', min: 0, max: 60, step: 0.5, unit: 'mm' },
+    { key: 'logoDepth', label: logoDepthLabel, min: 0.2, max: 10, step: 0.1, unit: 'mm' },
+    { key: 'logoOutlineDepth', label: logoBackingHeightLabel, min: 0.4, max: 15, step: 0.2, unit: 'mm' },
+  ],
+  'group-logoMountingHoles': [
+    { key: 'logoMountingLoopOuterD', label: 'Loop outer diameter', min: 8, max: 30, step: 0.5, unit: 'mm' },
+    { key: 'logoMountingLoopHoleD', label: 'Loop hole diameter', min: 3, max: 15, step: 0.5, unit: 'mm' },
+    { key: 'logoMountingLoopOffsetX', label: 'Fine position (left/right)', min: -30, max: 30, step: 0.5, unit: 'mm', dir: 'x' },
+    { key: 'logoMountingLoopOffsetY', label: 'Fine position (up/down)', min: -30, max: 30, step: 0.5, unit: 'mm', dir: 'y' },
+  ],
+  'group-logoMagnetHoles': [
+    { key: 'logoMagnetHoleDiameter', label: 'Hole diameter', min: 3, max: 20, step: 0.5, unit: 'mm' },
+    { key: 'logoMagnetHoleDepth', label: 'Hole depth (from the back)', min: 0.5, max: 20, step: 0.5, unit: 'mm' },
+    { key: 'logoMagnetHoleOffsetX', label: 'Fine position (left/right)', min: -30, max: 30, step: 0.5, unit: 'mm', dir: 'x' },
+    { key: 'logoMagnetHoleOffsetY', label: 'Fine position (up/down)', min: -30, max: 30, step: 0.5, unit: 'mm', dir: 'y' },
+  ],
 };
 
 // Builds one slider row (name + click-to-edit value + range input). Takes
@@ -2480,7 +3213,7 @@ function createSliderRow({ label, min, max, step, unit, bold, disabled, directio
   // Optional tag so other code (viewport drag-to-move) can find this
   // specific row's input/value elements later via querySelector, without
   // needing a full buildTextElementList() re-render to reflect a change.
-  if (field) row.dataset.field = field;
+  if (field) { row.dataset.field = field; row.dataset.unit = unit || ''; }
 
   const labelEl = document.createElement('label');
   const nameSpan = document.createElement('span');
@@ -2599,6 +3332,10 @@ function buildSliders() {
       const shapeMagnetKeys = ['shapeMagnetHoleDiameter', 'shapeMagnetHoleDepth', 'shapeMagnetHoleOffsetX', 'shapeMagnetHoleOffsetY'];
       const qrLoopKeys = ['qrMountingLoopOuterD', 'qrMountingLoopHoleD', 'qrMountingLoopOffsetX', 'qrMountingLoopOffsetY'];
       const qrMagnetKeys = ['qrMagnetHoleDiameter', 'qrMagnetHoleDepth', 'qrMagnetHoleOffsetX', 'qrMagnetHoleOffsetY'];
+      const shapeLogoPlacementKeys = ['shapeLogoSize', 'shapeLogoOffsetX', 'shapeLogoOffsetY', 'shapeLogoRotation', 'shapeLogoDepth'];
+      const logoPlacementKeys = ['logoSize', 'logoOffsetX', 'logoOffsetY', 'logoRotation', 'logoOutlineMargin', 'logoCornerRadius', 'logoDepth', 'logoOutlineDepth'];
+      const logoLoopKeys = ['logoMountingLoopOuterD', 'logoMountingLoopHoleD', 'logoMountingLoopOffsetX', 'logoMountingLoopOffsetY'];
+      const logoMagnetKeys = ['logoMagnetHoleDiameter', 'logoMagnetHoleDepth', 'logoMagnetHoleOffsetX', 'logoMagnetHoleOffsetY'];
       const disabled =
         (def.key === 'shapeHeight' && params.shapeType !== 'rectangle') ||
         (def.key === 'shapeCornerRadius' && params.shapeType !== 'square' && params.shapeType !== 'rectangle') ||
@@ -2609,7 +3346,14 @@ function buildSliders() {
         (shapeMagnetKeys.includes(def.key) && params.shapeMagnetHoles === 'none') ||
         (def.key === 'qrOutlineThickness' && !params.qrOutlineEnabled) ||
         (qrLoopKeys.includes(def.key) && params.qrMountingHoles === 'none') ||
-        (qrMagnetKeys.includes(def.key) && params.qrMagnetHoles === 'none');
+        (qrMagnetKeys.includes(def.key) && params.qrMagnetHoles === 'none') ||
+        (def.key === 'logoColorCount' && !importedLogo) ||
+        (shapeLogoPlacementKeys.includes(def.key) && (!importedLogo || !params.shapeLogoEnabled)) ||
+        (def.key === 'shapeLogoDepth' && params.engraveStyle === 'inlay') ||
+        (logoPlacementKeys.includes(def.key) && !importedLogo) ||
+        (def.key === 'logoDepth' && params.engraveStyle === 'inlay') ||
+        (logoLoopKeys.includes(def.key) && (!importedLogo || params.logoMountingHoles === 'none')) ||
+        (logoMagnetKeys.includes(def.key) && (!importedLogo || params.logoMagnetHoles === 'none'));
       const row = createSliderRow({
         label: typeof def.label === 'function' ? def.label() : def.label,
         min: def.min,
@@ -2619,6 +3363,12 @@ function buildSliders() {
         bold: def.bold,
         disabled,
         direction: def.dir,
+        // Lets the viewport drag-to-move code find and live-refresh this
+        // exact slider by params key (see refreshScalarSliderDisplay) --
+        // same idea as the per-text-element Position rows' own `field`,
+        // just keyed by the top-level params key instead of a local name
+        // scoped to one list entry.
+        field: def.key,
         getValue: () => params[def.key],
         setValue: (v) => { params[def.key] = v; },
       });
@@ -2923,6 +3673,7 @@ function setMode(mode, { record = true } = {}) {
   document.getElementById('dieCutModeBtn').classList.toggle('active', mode === 'dieCut');
   document.getElementById('shapeModeBtn').classList.toggle('active', mode === 'shape');
   document.getElementById('qrModeBtn').classList.toggle('active', mode === 'qrCode');
+  document.getElementById('logoModeBtn').classList.toggle('active', mode === 'logo');
   document.getElementById('dieCutPanel').style.display = mode === 'dieCut' ? '' : 'none';
   document.getElementById('shapePanel').style.display = mode === 'shape' ? '' : 'none';
   // QR mode's own left-panel section (QR pattern source/color settings)
@@ -2949,12 +3700,20 @@ function setMode(mode, { record = true } = {}) {
   document.getElementById('qrOutlinePanel').style.display = mode === 'qrCode' ? '' : 'none';
   document.getElementById('qrMountingHolesPanel').style.display = mode === 'qrCode' ? '' : 'none';
   document.getElementById('qrMagnetHolesPanel').style.display = mode === 'qrCode' ? '' : 'none';
+  // Logo mode's own left-panel section (the upload) plus its right-panel
+  // Logo/Mounting Holes/Magnet Holes settings -- same "always has an
+  // effect, gated on whether a logo's been imported rather than an
+  // enabled toggle" reasoning as Shape/QR mode's own sections above.
+  document.getElementById('logoPanel').style.display = mode === 'logo' ? '' : 'none';
+  document.getElementById('logoSettingsPanel').style.display = mode === 'logo' ? '' : 'none';
+  updateLogoHoleAvailability();
   if (record) commitHistory(before);
   rebuild();
 }
 document.getElementById('dieCutModeBtn').addEventListener('click', () => setMode('dieCut'));
 document.getElementById('shapeModeBtn').addEventListener('click', () => setMode('shape'));
 document.getElementById('qrModeBtn').addEventListener('click', () => setMode('qrCode'));
+document.getElementById('logoModeBtn').addEventListener('click', () => setMode('logo'));
 
 // Applies to whichever mode is active -- see DEFAULTS.engraveStyle.
 function setEngraveStyle(style, { record = true } = {}) {
@@ -3018,6 +3777,104 @@ function setShapeOutlineEnabled(enabled) {
 }
 document.getElementById('shapeOutlineOnBtn').addEventListener('click', () => setShapeOutlineEnabled(true));
 document.getElementById('shapeOutlineOffBtn').addEventListener('click', () => setShapeOutlineEnabled(false));
+
+// ---------------------------------------------------------------------
+// Logo import -- ONE shared uploaded logo (see importedLogo state up top),
+// used two different ways depending on mode: Logo mode's own silhouette
+// (grown by logoOutlineMargin) IS the die-cut backing, colors on top (see
+// buildLogoSign()); Shape mode instead overlays the color layers on
+// whatever backing shape is picked (shapeLogo* params), independent of
+// shapeType. A single hidden file input is reused by both panels' "Choose
+// logo image…" buttons -- same file, same handler, regardless of which
+// mode triggered it.
+// ---------------------------------------------------------------------
+function renderLogoStatus() {
+  const text = importedLogo
+    ? `${importedLogo.sourceName} — ${importedLogo.colorLayers.length} color${importedLogo.colorLayers.length === 1 ? '' : 's'} detected.`
+    : 'No logo loaded.';
+  for (const id of ['logoStatus', 'shapeLogoStatus']) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+}
+
+async function handleLogoFileSelected(file) {
+  if (!file) return;
+  const before = snapshotState();
+  for (const id of ['logoStatus', 'shapeLogoStatus']) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = 'Tracing…';
+  }
+  try {
+    await importLogoFile(file);
+    // Turn Shape mode's overlay on automatically if that's the CURRENT
+    // mode, so the upload has an immediately visible effect there instead
+    // of silently doing nothing until the separate On/Off toggle is also
+    // found and clicked. Logo mode itself has no such toggle -- an
+    // imported logo is always used there, the same way a picked shape is
+    // always used in Shape mode.
+    if (params.mode === 'shape') params.shapeLogoEnabled = true;
+    renderLogoStatus();
+    syncLogoToggleButtons();
+    updateLogoHoleAvailability();
+    commitHistory(before);
+    buildSliders();
+    rebuild();
+  } catch (err) {
+    const msg = `Import failed: ${err.message}`;
+    for (const id of ['logoStatus', 'shapeLogoStatus']) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = msg;
+    }
+    console.error(err);
+  }
+}
+
+const logoFileInputEl = document.getElementById('logoFileInput');
+logoFileInputEl.addEventListener('change', (ev) => {
+  handleLogoFileSelected(ev.target.files && ev.target.files[0]);
+  logoFileInputEl.value = '';
+});
+document.getElementById('logoChooseBtn').addEventListener('click', () => logoFileInputEl.click());
+document.getElementById('shapeLogoChooseBtn').addEventListener('click', () => logoFileInputEl.click());
+
+function syncLogoToggleButtons() {
+  document.getElementById('shapeLogoOnBtn').classList.toggle('active', params.shapeLogoEnabled);
+  document.getElementById('shapeLogoOffBtn').classList.toggle('active', !params.shapeLogoEnabled);
+}
+
+function setShapeLogoEnabled(enabled) {
+  const before = snapshotState();
+  params.shapeLogoEnabled = enabled;
+  syncLogoToggleButtons();
+  commitHistory(before);
+  buildSliders();
+  rebuild();
+}
+document.getElementById('shapeLogoOnBtn').addEventListener('click', () => setShapeLogoEnabled(true));
+document.getElementById('shapeLogoOffBtn').addEventListener('click', () => setShapeLogoEnabled(false));
+
+// ---------------------------------------------------------------------
+// Logo mode -- a single imported logo IS the whole design (see
+// buildLogoSign()), the same way a picked shape is Shape mode's whole
+// design. No on/off toggle (there's nothing else the mode could show), so
+// unlike Die-cut/Shape's Mounting Holes/Magnet Holes availability (gated
+// on an Outline enabled toggle), these are gated on whether a logo has
+// actually been imported at all.
+// ---------------------------------------------------------------------
+const logoOutlineColorEl = document.getElementById('logoOutlineColorInput');
+logoOutlineColorEl.addEventListener('input', () => { params.logoOutlineColor = logoOutlineColorEl.value; queueRebuild(); });
+logoOutlineColorEl.addEventListener('change', () => commitHistory(snapshotState()));
+
+function updateLogoHoleAvailability() {
+  const available = !!importedLogo;
+  for (const btnPrefix of ['logoMountingHoles', 'logoMagnetHoles']) {
+    for (const value of HOLE_PLACEMENT_VALUES) {
+      document.getElementById(`${btnPrefix}${capitalize(value)}Btn`).disabled = !available;
+    }
+    document.getElementById(`${btnPrefix}Toggle`).classList.toggle('is-disabled', !available);
+  }
+}
 
 // ---------------------------------------------------------------------
 // QR mode's Outline -- ONE shared on/off + color that does double duty:
@@ -3177,6 +4034,8 @@ const HOLE_PLACEMENT_CONFIGS = [
   { paramKey: 'shapeMagnetHoles', btnPrefix: 'shapeMagnetHoles' },
   { paramKey: 'qrMountingHoles', btnPrefix: 'qrMountingHoles' },
   { paramKey: 'qrMagnetHoles', btnPrefix: 'qrMagnetHoles' },
+  { paramKey: 'logoMountingHoles', btnPrefix: 'logoMountingHoles' },
+  { paramKey: 'logoMagnetHoles', btnPrefix: 'logoMagnetHoles' },
 ];
 
 function setHolePlacement(paramKey, mode, btnPrefix) {
@@ -3284,11 +4143,15 @@ let undoStack = [];
 let redoStack = [];
 
 function snapshotState() {
-  return { params: cloneParams(params) };
+  // importedLogo is never mutated in place -- importLogoFromPNG/SVG above
+  // always assigns a brand-new object -- so a plain reference is enough
+  // for undo/redo to detect a change (see commitHistory() below), same
+  // idea as qrImportedImage's own dataURL string comparison elsewhere.
+  return { params: cloneParams(params), importedLogo };
 }
 
 function commitHistory(before) {
-  if (JSON.stringify(before.params) === JSON.stringify(params)) return;
+  if (before.importedLogo === importedLogo && JSON.stringify(before.params) === JSON.stringify(params)) return;
   undoStack.push(before);
   redoStack = [];
   updateUndoRedoButtons();
@@ -3315,6 +4178,16 @@ function syncQrPanelFromParams() {
 
 function applySnapshot(snap) {
   params = cloneParams(snap.params);
+  // Undo/redo always supplies importedLogo explicitly (snapshotState()
+  // includes it, even as null) -- the couple of other callers (Reset,
+  // Load Project) pass it explicitly too, so `undefined` only shows up
+  // here if some future caller forgets to; falling back to null is the
+  // same "truly blank slate" default Reset itself wants.
+  importedLogo = snap.importedLogo !== undefined ? snap.importedLogo : null;
+  logoFileInputEl.value = '';
+  renderLogoStatus();
+  syncLogoToggleButtons();
+  logoOutlineColorEl.value = params.logoOutlineColor;
   dieCutOutlineColorEl.value = params.dieCutOutlineColor;
   document.getElementById('dieCutOutlineOnBtn').classList.toggle('active', params.dieCutOutlineEnabled);
   document.getElementById('dieCutOutlineOffBtn').classList.toggle('active', !params.dieCutOutlineEnabled);
@@ -3368,17 +4241,21 @@ document.getElementById('redoBtn').addEventListener('click', redo);
 document.getElementById('resetBtn').addEventListener('click', () => {
   const before = snapshotState();
   params = cloneParams(DEFAULTS);
+  // Reset clears any imported logo too, not just the sliders -- otherwise
+  // "Reset" wouldn't actually get back to a truly blank slate. Still one
+  // undo step: importedLogo is part of snapshotState()/applySnapshot(), so
+  // this is fully covered by the commitHistory() below.
   commitHistory(before);
-  applySnapshot({ params });
+  applySnapshot({ params, importedLogo: null });
 });
 
 // ---------------------------------------------------------------------
-// Save / load project -- the whole design as one JSON file, so a
-// customized sign can be picked back up later without re-tweaking every
-// slider from scratch.
+// Save / load project -- the whole design (params + any imported logo) as
+// one JSON file, so a customized sign can be picked back up later without
+// re-tweaking every slider from scratch.
 // ---------------------------------------------------------------------
 document.getElementById('saveProjectBtn').addEventListener('click', () => {
-  const data = { version: 1, params };
+  const data = { version: 1, params, importedLogo };
   downloadBlob(
     new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }),
     'sign-project.json'
@@ -3423,7 +4300,7 @@ loadProjectInput.addEventListener('change', async (ev) => {
     const loaded = sanitizeLoadedParams({ ...DEFAULTS, ...(data.params || {}) });
     params = cloneParams(loaded);
     commitHistory(before);
-    applySnapshot({ params });
+    applySnapshot({ params, importedLogo: data.importedLogo || null });
   } catch (err) {
     statusEl.textContent = 'Failed to load project file (see console).';
     console.error(err);
@@ -3476,7 +4353,7 @@ const AUTOSAVE_KEY = 'signGeneratorAutosave';
 
 function autosave() {
   try {
-    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({ version: 1, params }));
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({ version: 1, params, importedLogo }));
   } catch (e) {
     // localStorage can throw (quota exceeded, private-browsing lockdown,
     // disabled entirely, etc.) -- losing autosave silently is fine, the
@@ -3501,11 +4378,15 @@ async function main() {
   if (saved && saved.params) {
     const loaded = sanitizeLoadedParams({ ...DEFAULTS, ...saved.params });
     params = cloneParams(loaded);
+    importedLogo = saved.importedLogo || null;
   }
   resizeRenderer();
   animate();
 
   setMode(params.mode, { record: false });
+  renderLogoStatus();
+  syncLogoToggleButtons();
+  logoOutlineColorEl.value = params.logoOutlineColor;
   dieCutOutlineColorEl.value = params.dieCutOutlineColor;
   document.getElementById('dieCutOutlineOnBtn').classList.toggle('active', params.dieCutOutlineEnabled);
   document.getElementById('dieCutOutlineOffBtn').classList.toggle('active', !params.dieCutOutlineEnabled);

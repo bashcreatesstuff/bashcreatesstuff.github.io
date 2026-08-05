@@ -58,6 +58,7 @@
           <button type="button" id="dieCutModeBtn" class="active">Text + Outline</button>
           <button type="button" id="shapeModeBtn">Text + Shape</button>
           <button type="button" id="qrModeBtn">QR Code + Text</button>
+          <button type="button" id="logoModeBtn">Logo + Outline</button>
         </div>
       </div>
 
@@ -106,7 +107,7 @@
         <span class="select-label">Shape</span>
         <div class="sample-gallery" id="shapeLibrary"></div>
 
-        <details open>
+        <details>
           <summary>Shape size</summary>
           <div id="group-shapeSize"></div>
           <div class="row color-row">
@@ -117,7 +118,7 @@
           </div>
         </details>
 
-        <details open>
+        <details>
           <summary>Text</summary>
           <p class="hint" style="margin-top: 0;">
             Each line is positioned, sized, and colored independently, and
@@ -140,6 +141,28 @@
           <div class="row buttons">
             <button type="button" id="addTextElementBtn" class="secondary-btn">+ Add text</button>
           </div>
+        </details>
+
+        <details>
+          <summary>Logo</summary>
+          <p class="hint" style="margin-top: 0;">
+            Upload a PNG or SVG logo to overlay its detected color layers
+            on top of the shape above, independent of shapeType -- sized,
+            positioned, and rotated on its own, clipped so it can't
+            overhang the edge.
+          </p>
+          <div class="row buttons">
+            <button type="button" id="shapeLogoChooseBtn" class="secondary-btn">Choose logo image…</button>
+          </div>
+          <p class="hint" style="margin-top: -6px;" id="shapeLogoStatus">No logo loaded.</p>
+          <div class="row">
+            <span class="select-label">Logo</span>
+            <div class="pill-toggle" id="shapeLogoToggle">
+              <button type="button" id="shapeLogoOnBtn">On</button>
+              <button type="button" id="shapeLogoOffBtn" class="active">Off</button>
+            </div>
+          </div>
+          <div id="group-shapeLogo"></div>
         </details>
       </div>
 
@@ -228,6 +251,32 @@
           <div id="qrTextElementList"></div>
           <div class="row buttons">
             <button type="button" id="addQrTextElementBtn" class="secondary-btn">+ Add text</button>
+          </div>
+        </details>
+      </div>
+
+      <!-- ================= Logo mode ================= -->
+      <div id="logoPanel" style="display: none;">
+        <details open>
+          <summary>Logo</summary>
+          <p class="hint" style="margin-top: 0;">
+            Upload a PNG (auto-detects print-color regions) or SVG
+            (grouped by each shape's own fill color) logo. Its own
+            silhouette becomes the die-cut outline, and each detected
+            color becomes its own paintable layer on top. Mounting Holes
+            and Magnet Holes are on the right.
+          </p>
+          <div class="row buttons">
+            <button type="button" id="logoChooseBtn" class="secondary-btn">Choose logo image…</button>
+          </div>
+          <p class="hint" style="margin-top: -6px;" id="logoStatus">No logo loaded.</p>
+          <div id="group-logoImport"></div>
+          <div id="group-logoSize"></div>
+          <div class="row color-row">
+            <label class="color-swatch-label">
+              <span>Outline color</span>
+              <input type="color" id="logoOutlineColorInput" value="#7c6fe0">
+            </label>
           </div>
         </details>
       </div>
@@ -457,6 +506,45 @@
         <hr class="panel-divider" />
       </div>
 
+      <div id="logoSettingsPanel" style="display: none;">
+        <details open>
+          <summary>Mounting Holes</summary>
+          <p class="hint" style="margin-top: 0;">
+            Adds a loop with a hole for hanging, fused to the top of the
+            logo's own outline backing. Left/right position is mirrored
+            for Corners.
+          </p>
+          <div class="row">
+            <span class="select-label">Holes</span>
+            <div class="pill-toggle" id="logoMountingHolesToggle">
+              <button type="button" id="logoMountingHolesNoneBtn" class="active">None</button>
+              <button type="button" id="logoMountingHolesCornersBtn">Corners</button>
+              <button type="button" id="logoMountingHolesCenterBtn">Center</button>
+            </div>
+          </div>
+          <div id="group-logoMountingHoles"></div>
+        </details>
+
+        <details>
+          <summary>Magnet Holes</summary>
+          <p class="hint" style="margin-top: 0;">
+            Cuts hole(s) into the back for embedding a magnet. Blind by
+            default -- set Hole depth deeper than the backing thickness
+            for a through-hole (doubles as a mounting hole).
+          </p>
+          <div class="row">
+            <span class="select-label">Holes</span>
+            <div class="pill-toggle" id="logoMagnetHolesToggle">
+              <button type="button" id="logoMagnetHolesNoneBtn" class="active">None</button>
+              <button type="button" id="logoMagnetHolesCornersBtn">Corners</button>
+              <button type="button" id="logoMagnetHolesCenterBtn">Center</button>
+            </div>
+          </div>
+          <div id="group-logoMagnetHoles"></div>
+        </details>
+        <hr class="panel-divider" />
+      </div>
+
       <div class="row">
         <span class="select-label">Export format</span>
         <div class="pill-toggle" id="exportFormatToggle">
@@ -474,6 +562,7 @@
         <button id="saveProjectBtn" class="secondary-btn">Save Project</button>
         <button id="loadProjectBtn" class="secondary-btn">Load Project</button>
         <input type="file" id="loadProjectInput" accept="application/json,.json" style="display:none" />
+        <input type="file" id="logoFileInput" accept="image/*,.svg" style="display:none" />
       </div>
       <div class="row buttons icon-buttons">
         <button id="undoBtn" class="icon-btn secondary-btn" disabled title="Undo">
@@ -583,6 +672,19 @@
       </button>
     </div>
     <div class="info-dialog-body">
+      <h3>2026-08-04</h3>
+      <ul>
+        <li>Added a new Logo mode, its own top-level mode button alongside Text + Outline, Text + Shape, and QR Code + Text. Upload a PNG (auto-detects print-color regions via k-means clustering, adjustable "Colors to detect") or SVG (grouped by each shape's own fill color) logo -- its own silhouette becomes the die-cut outline (grown by an adjustable Outline slider, 0 = hug the silhouette exactly), and each detected color becomes its own paintable emboss/inlay layer on top, same mechanics as Die-cut Text mode's letters-plus-backing. The upload button and every logo-shaping setting (Size, Position, Rotation, Outline, Emboss height, Backing thickness, Outline color) live together in one left-panel drawer; Mounting Holes and Magnet Holes are on the right, same as the other modes. No text list -- a caption belongs in Die-cut Text mode instead.</li>
+        <li>Added a logo overlay to Shape mode, independent of this new Logo mode: upload the same kind of PNG/SVG logo via a "Logo" drawer and place its color layers on top of whichever backing shape is picked (square/rectangle/circle/heart/star/hexagon/cross), sized/positioned/rotated on its own and clipped so it can't overhang the shape's edge. Has its own Logo On/Off toggle and Size/Position/Rotation/Emboss height sliders. The uploaded file and "Colors to detect" setting are shared with Logo mode -- one upload works either way, since it's the same image regardless of which mode uses it.</li>
+        <li>Both logo features reuse the app's existing alpha-mask marching-squares tracer (already used for font/QR tracing) rather than a separate tracing implementation. The imported logo round-trips through undo/redo, Save/Load project JSON, and autosave, same as every other design state; Reset clears it.</li>
+        <li>Fixed Inlay mode leaving a uniform Outline/backing-colored strip along the entire bottom edge and side walls of a logo's color regions (both in Logo mode and Shape mode's overlay) -- each color's recess now cuts the full backing depth instead of stopping 0.2mm short, so a color's own solid spans the full thickness and both faces show the logo's real colors. The 0.2mm floor that die-cut text still reserves (to stop a small letter's own recess from opening a hole through a much larger surrounding backing) isn't needed here: a logo color is always immediately backfilled by its own solid and sits edge-to-edge against its neighbors, so a full-depth cut can't create a void or a disconnected piece.</li>
+        <li>Fixed a hairline sliver of Outline color still showing at the logo's own outer edge (and any concave notch in it, e.g. a speech-bubble tail) even with Outline set to 0 -- the master silhouette trace and each detected color's own trace come from different pixel masks, simplified independently, so their polygon boundaries rarely land on exactly the same vertices even though the underlying pixel sets are a perfect partition. The biggest detected color (almost always the background) is now computed as "whatever's left of the true silhouette after every other color's own shape is subtracted" instead of its own independently-traced boundary, closing the seam by construction with no overlap between colors (an earlier attempt at this via a small uniform grow on every color caused z-fighting between adjacent colors and was reverted).</li>
+        <li>Added a Corner radius slider to Logo mode's outline (same erode-then-dilate rounding used by QR mode and Shape mode's square/rectangle), between Outline and Emboss height. Every detected color is clipped against the final rounded outline, so a corner that gets rounded off can't leave a color sticking out past the backing's actual edge.</li>
+        <li>Fixed Logo mode's Corner radius doing nothing at 0 -- growing the outline by the Outline margin used offset()'s default Round join, which rounds every convex corner regardless of Corner radius (same bug QR mode's Outline trim had, fixed there the same way). The margin now grows with a Miter (sharp) join instead, so Corner radius is the only thing that rounds a corner off.</li>
+        <li>Fixed the Emboss height slider (Logo mode and Shape mode's logo overlay) staying live in Inlay mode even though Inlay always cuts each color's recess as deep as it safely can and ignores this slider entirely -- now greyed out and relabeled "Emboss height (fixed by Inlay)" while Inlay is selected, matching how the die-cut text list's own Text height slider already behaves.</li>
+        <li>Made the logo draggable directly in the 3D viewport, same click-and-drag as a line of text -- works for both Shape mode's logo overlay and standalone Logo mode's own logo. Grabbing any part of the logo (any detected color, or the outline in Logo mode) moves the whole thing together, updating the same Position sliders live. Under the hood, the drag system now supports a single shared position (the logo's) in addition to its original "one array element's own position" case, so this reuses the exact same mechanism text dragging already used rather than a separate implementation.</li>
+        <li>Changed Shape mode's left-panel drawers (Shape size, Text) to start collapsed by default, matching Logo mode's own drawer -- only the shape gallery itself is visible right away.</li>
+      </ul>
       <h3>2026-08-03</h3>
       <ul>
         <li>Changed which drawer starts open on QR Code + Text mode's right panel: Size &amp; Thickness now opens by default instead of Outline (Outline, Mounting Holes, and Magnet Holes all start collapsed). QR-mode-specific -- Die-cut and Shape mode still open on their own Outline drawer.</li>

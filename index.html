@@ -120,11 +120,19 @@
     padding-left: 2px;
   }
 
+  .left-col {
+    display: flex;
+    flex-direction: column;
+  }
+
   .socials {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    align-content: stretch;
     gap: 8px;
-    margin-bottom: 2rem;
+    flex: 1;
+    margin-bottom: 0;
   }
 
   .social-link {
@@ -132,12 +140,13 @@
     align-items: center;
     gap: 8px;
     padding: 0.65rem 0.85rem;
+    min-height: 0;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 6px;
     text-decoration: none;
     color: var(--text);
-    font-size: 0.875rem;
+    font-size: 1.15rem;
     font-weight: 400;
     transition: background 0.15s, border-color 0.15s;
   }
@@ -145,8 +154,8 @@
   .social-link:hover { background: var(--surface-hover); }
 
   .social-link svg {
-    width: 15px;
-    height: 15px;
+    width: 24px;
+    height: 24px;
     flex-shrink: 0;
   }
 
@@ -353,6 +362,7 @@
 
     .left-col  { order: 1; margin-bottom: 2rem; }
     .right-col { order: 2; }
+    .socials { flex: none; margin-bottom: 2rem; }
 
     /* Intro: centered, scaled logo */
     #intro {
@@ -577,7 +587,7 @@
 </div>
 <div class="container">
 
-<div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start;">
+<div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: stretch;">
   <div class="left-col">
 
     <header class="header">
@@ -586,7 +596,7 @@
       <div class="bio">
         <p>"The only person that could possibly ever sustain an aneurysm while playing Animal Crossing"</p>
         <p>Former radio announcer, part-time creative, full-time nerd.</p>
-        <p>3D printing, streaming, gaming &amp; more</p>
+        <p>3D printing, streaming, gaming &amp; more.</p>
       </div>
     </header>
 
@@ -712,7 +722,7 @@
 
 <hr class="divider">
 
-<p class="section-label">Free Web Tools</p>
+<p class="section-label">Vibe Coded Web Tools</p>
 <div class="downloads">
 
   <div class="download-card">

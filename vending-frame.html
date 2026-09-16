@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Vending Frame</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --bg:#0b0b0d;
+    --panel:rgba(20,20,24,0.82);
+    --accent:#ff5a36;
+    --accent-2:#ffd23f;
+    --text:#f2f0ec;
+    --text-dim:#a9a6a1;
+    --guide:#ffffff;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{
+    margin:0; padding:0; height:100%; width:100%;
+    background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    overflow:hidden;
+  }
+  #stage{
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    background:#000;
+  }
+  video{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    object-fit:cover;
+    background:#000;
+  }
+  #overlay{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    pointer-events:none;
+  }
+  #startScreen{
+    position:fixed; inset:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:18px; padding:32px; text-align:center;
+    background:radial-gradient(circle at 50% 30%, #1c1c20 0%, #0b0b0d 70%);
+    z-index:20;
+  }
+  #startScreen h1{ font-size:22px; margin:0 0 4px; letter-spacing:0.3px; }
+  #startScreen p{ color:var(--text-dim); font-size:14px; line-height:1.5; max-width:320px; margin:0; }
+  .bigbtn{
+    background:var(--accent); color:#1a0e08; border:none;
+    font-size:16px; font-weight:600; padding:14px 28px; border-radius:999px;
+    cursor:pointer; box-shadow:0 4px 18px rgba(255,90,54,0.35);
+  }
+  .bigbtn:active{ transform:scale(0.97); }
+  #errorBox{
+    display:none; position:fixed; inset:0; z-index:30;
+    align-items:center; justify-content:center; padding:28px;
+    background:rgba(0,0,0,0.92); text-align:center; flex-direction:column; gap:14px;
+  }
+  #errorBox p{ color:var(--text-dim); font-size:14px; max-width:320px; }
+
+  /* top bar */
+  #topBar{
+    position:fixed; top:0; left:0; right:0; z-index:10;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 14px 10px; padding-top:calc(14px + env(safe-area-inset-top));
+    background:linear-gradient(to bottom, rgba(0,0,0,0.55), transparent);
+  }
+  .pill{
+    background:var(--panel); border:1px solid rgba(255,255,255,0.08);
+    color:var(--text); font-size:13px; padding:8px 14px; border-radius:999px;
+    display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none;
+    backdrop-filter:blur(6px);
+  }
+  .pill svg{ width:16px; height:16px; }
+  #counterPill{ font-variant-numeric:tabular-nums; }
+
+  /* aspect selector */
+  #aspectRow{
+    position:fixed; top:64px; left:0; right:0; z-index:10;
+    display:flex; justify-content:center; gap:8px; padding-top:env(safe-area-inset-top);
+  }
+  .aspectBtn{
+    background:var(--panel); border:1px solid rgba(255,255,255,0.08);
+    color:var(--text-dim); font-size:12px; padding:6px 12px; border-radius:999px;
+    cursor:pointer;
+  }
+  .aspectBtn.active{ color:#1a0e08; background:var(--accent-2); border-color:transparent; font-weight:600; }
+
+  /* bottom controls */
+  #bottomBar{
+    position:fixed; bottom:0; left:0; right:0; z-index:10;
+    padding:14px 18px calc(18px + env(safe-area-inset-bottom));
+    background:linear-gradient(to top, rgba(0,0,0,0.65), transparent);
+    display:flex; flex-direction:column; gap:12px;
+  }
+  #gallery{
+    display:flex; gap:8px; overflow-x:auto; padding:2px;
+    scrollbar-width:none;
+  }
+  #gallery::-webkit-scrollbar{ display:none; }
+  .thumb{
+    position:relative; flex:0 0 auto;
+    width:54px; height:54px; border-radius:10px; overflow:hidden;
+    border:1.5px solid rgba(255,255,255,0.25);
+    cursor:pointer;
+  }
+  .thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .thumb .num{
+    position:absolute; bottom:2px; right:4px; font-size:9px;
+    background:rgba(0,0,0,0.6); padding:1px 4px; border-radius:6px;
+  }
+
+  #controlsRow{
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  #controlsRow .side{ display:flex; gap:10px; align-items:center; flex:1; }
+  #controlsRow .side.right{ justify-content:flex-end; }
+
+  #shutterWrap{ display:flex; justify-content:center; }
+  #shutter{
+    width:74px; height:74px; border-radius:50%;
+    background:transparent; border:4px solid var(--guide);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+  }
+  #shutter::after{
+    content:""; width:58px; height:58px; border-radius:50%;
+    background:var(--text);
+  }
+  #shutter:active::after{ background:var(--accent-2); }
+
+  .iconBtn{
+    width:44px; height:44px; border-radius:50%;
+    background:var(--panel); border:1px solid rgba(255,255,255,0.08);
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .iconBtn svg{ width:20px; height:20px; }
+
+  /* review modal */
+  #reviewModal{
+    display:none; position:fixed; inset:0; z-index:40;
+    background:rgba(0,0,0,0.95); flex-direction:column;
+  }
+  #reviewModal img{
+    flex:1; width:100%; object-fit:contain; min-height:0;
+  }
+  #reviewControls{
+    display:flex; gap:10px; padding:16px; padding-bottom:calc(16px + env(safe-area-inset-bottom));
+    justify-content:center; flex-wrap:wrap;
+  }
+  .textBtn{
+    background:var(--panel); color:var(--text); border:1px solid rgba(255,255,255,0.12);
+    font-size:14px; padding:11px 18px; border-radius:12px; cursor:pointer;
+  }
+  .textBtn.primary{ background:var(--accent); color:#1a0e08; font-weight:600; border:none; }
+  .textBtn.danger{ color:#ff8a7a; }
+
+  #toast{
+    position:fixed; left:50%; bottom:130px; transform:translateX(-50%);
+    background:rgba(20,20,24,0.95); color:var(--text); font-size:13px;
+    padding:10px 16px; border-radius:999px; z-index:50;
+    opacity:0; pointer-events:none; transition:opacity 0.25s ease;
+    white-space:nowrap;
+  }
+  #toast.show{ opacity:1; }
+
+  label.chk{
+    display:flex; align-items:center; gap:6px; color:var(--text-dim); font-size:12px;
+  }
+</style>
+</head>
+<body>
+
+<div id="startScreen">
+  <h1>Vending Frame</h1>
+  <p>A camera guide to help you frame every vending machine the same way, so they line up in a slideshow later.</p>
+  <button class="bigbtn" id="startBtn">Turn on camera</button>
+</div>
+
+<div id="errorBox">
+  <p id="errorText">Camera access is needed for this to work.</p>
+  <button class="bigbtn" id="retryBtn">Try again</button>
+</div>
+
+<div id="stage" style="display:none;">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="overlay"></canvas>
+
+  <div id="topBar">
+    <div class="pill" id="counterPill">📷 0 shots</div>
+    <div class="pill" id="flipBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 4H9a1 1 0 0 0-1 1v2H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-4V5a1 1 0 0 0-1-1Z"/><circle cx="12" cy="14" r="3.5"/></svg>
+      Flip
+    </div>
+  </div>
+
+  <div id="aspectRow">
+    <div class="aspectBtn active" data-ratio="0.62">Vending</div>
+    <div class="aspectBtn" data-ratio="0.75">Portrait</div>
+    <div class="aspectBtn" data-ratio="1">Square</div>
+  </div>
+
+  <div id="bottomBar">
+    <div id="gallery"></div>
+    <div id="controlsRow">
+      <div class="side left">
+        <label class="chk"><input type="checkbox" id="cropChk"> Crop to guide</label>
+      </div>
+      <div id="shutterWrap"><div id="shutter"></div></div>
+      <div class="side right">
+        <div class="iconBtn" id="zipBtn" title="Download all">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="reviewModal">
+  <img id="reviewImg" alt="captured shot">
+  <div id="reviewControls">
+    <button class="textBtn danger" id="deleteBtn">Delete</button>
+    <button class="textBtn" id="closeReviewBtn">Back to camera</button>
+    <button class="textBtn primary" id="saveOneBtn">Save photo</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+  const startScreen = document.getElementById('startScreen');
+  const startBtn = document.getElementById('startBtn');
+  const errorBox = document.getElementById('errorBox');
+  const errorText = document.getElementById('errorText');
+  const retryBtn = document.getElementById('retryBtn');
+  const stage = document.getElementById('stage');
+  const video = document.getElementById('video');
+  const overlay = document.getElementById('overlay');
+  const ctx = overlay.getContext('2d');
+  const shutter = document.getElementById('shutter');
+  const flipBtn = document.getElementById('flipBtn');
+  const zipBtn = document.getElementById('zipBtn');
+  const gallery = document.getElementById('gallery');
+  const counterPill = document.getElementById('counterPill');
+  const cropChk = document.getElementById('cropChk');
+  const toast = document.getElementById('toast');
+  const reviewModal = document.getElementById('reviewModal');
+  const reviewImg = document.getElementById('reviewImg');
+  const closeReviewBtn = document.getElementById('closeReviewBtn');
+  const deleteBtn = document.getElementById('deleteBtn');
+  const saveOneBtn = document.getElementById('saveOneBtn');
+
+  let currentFacing = 'environment';
+  let stream = null;
+  let ratio = 0.62; // guide width/height
+  let shots = []; // {blob, url, name}
+  let reviewIndex = -1;
+  let downloadsCap = null;
+
+  if (typeof window.claude !== 'undefined' && window.claude && typeof window.claude.use === 'function'){
+    window.claude.use('downloads').then(function(d){ downloadsCap = d; }).catch(function(){ downloadsCap = null; });
+  }
+
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(function(){ toast.classList.remove('show'); }, 1800);
+  }
+
+  function resizeCanvas(){
+    overlay.width = overlay.clientWidth * devicePixelRatio;
+    overlay.height = overlay.clientHeight * devicePixelRatio;
+    drawGuide();
+  }
+
+  function getGuideRectCss(){
+    const w = overlay.clientWidth, h = overlay.clientHeight;
+    let gw = w * 0.72;
+    let gh = gw / ratio;
+    if (gh > h * 0.72){
+      gh = h * 0.72;
+      gw = gh * ratio;
+    }
+    const x = (w - gw) / 2;
+    const y = (h - gh) / 2;
+    return {x:x, y:y, w:gw, h:gh};
+  }
+
+  function drawGuide(){
+    const w = overlay.width, h = overlay.height;
+    ctx.clearRect(0,0,w,h);
+    const dpr = devicePixelRatio;
+    const r = getGuideRectCss();
+    const rx = r.x*dpr, ry = r.y*dpr, rw = r.w*dpr, rh = r.h*dpr;
+
+    // dim outside the guide
+    ctx.fillStyle = 'rgba(0,0,0,0.42)';
+    ctx.fillRect(0,0,w,h);
+    ctx.clearRect(rx,ry,rw,rh);
+    // redraw a faint fill inside so it's not fully transparent-harsh
+    ctx.fillStyle = 'rgba(0,0,0,0.0)';
+    ctx.fillRect(rx,ry,rw,rh);
+
+    // dashed rectangle
+    ctx.setLineDash([10*dpr, 8*dpr]);
+    ctx.lineWidth = 2.5*dpr;
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+    ctx.strokeRect(rx,ry,rw,rh);
+
+    // corner ticks (solid, brighter) for precise lock-in
+    ctx.setLineDash([]);
+    ctx.strokeStyle = '#ffd23f';
+    ctx.lineWidth = 3*dpr;
+    const tick = Math.min(rw,rh)*0.06;
+    const corners = [[rx,ry,1,1],[rx+rw,ry,-1,1],[rx,ry+rh,1,-1],[rx+rw,ry+rh,-1,-1]];
+    corners.forEach(function(c){
+      const cx=c[0], cy=c[1], sx=c[2], sy=c[3];
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + sy*tick);
+      ctx.lineTo(cx, cy);
+      ctx.lineTo(cx + sx*tick, cy);
+      ctx.stroke();
+    });
+
+    // center crosshair, subtle
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1.5*dpr;
+    const cx = rx+rw/2, cy = ry+rh/2, s = 8*dpr;
+    ctx.beginPath();
+    ctx.moveTo(cx-s,cy); ctx.lineTo(cx+s,cy);
+    ctx.moveTo(cx,cy-s); ctx.lineTo(cx,cy+s);
+    ctx.stroke();
+  }
+
+  async function startCamera(facing){
+    try{
+      if (stream){ stream.getTracks().forEach(function(t){ t.stop(); }); }
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: {ideal: facing}, width:{ideal:1920}, height:{ideal:1920} },
+        audio: false
+      });
+      video.srcObject = stream;
+      await video.play();
+      startScreen.style.display = 'none';
+      errorBox.style.display = 'none';
+      stage.style.display = 'block';
+      resizeCanvas();
+    }catch(err){
+      startScreen.style.display = 'none';
+      stage.style.display = 'none';
+      errorBox.style.display = 'flex';
+      if (err && err.name === 'NotAllowedError'){
+        errorText.textContent = 'Camera permission was denied. Enable camera access for this page in your browser settings, then try again.';
+      } else if (err && err.name === 'NotFoundError'){
+        errorText.textContent = 'No camera was found on this device.';
+      } else {
+        errorText.textContent = 'Could not start the camera (' + (err && err.message ? err.message : 'unknown error') + ').';
+      }
+    }
+  }
+
+  startBtn.addEventListener('click', function(){ startCamera(currentFacing); });
+  retryBtn.addEventListener('click', function(){ startCamera(currentFacing); });
+  window.addEventListener('resize', resizeCanvas);
+
+  flipBtn.addEventListener('click', function(){
+    currentFacing = currentFacing === 'environment' ? 'user' : 'environment';
+    startCamera(currentFacing);
+  });
+
+  document.querySelectorAll('.aspectBtn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.aspectBtn').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      ratio = parseFloat(btn.getAttribute('data-ratio'));
+      drawGuide();
+    });
+  });
+
+  function capture(){
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh) return;
+
+    const canvas = document.createElement('canvas');
+    let sx=0, sy=0, sw=vw, sh=vh;
+
+    if (cropChk.checked){
+      // map the on-screen guide rect (object-fit: cover) to source video pixels
+      const dispW = overlay.clientWidth, dispH = overlay.clientHeight;
+      const scale = Math.max(dispW / vw, dispH / vh);
+      const drawnW = vw * scale, drawnH = vh * scale;
+      const offX = (dispW - drawnW) / 2, offY = (dispH - drawnH) / 2;
+      const r = getGuideRectCss();
+      sx = (r.x - offX) / scale;
+      sy = (r.y - offY) / scale;
+      sw = r.w / scale;
+      sh = r.h / scale;
+      sx = Math.max(0, sx); sy = Math.max(0, sy);
+      sw = Math.min(sw, vw - sx); sh = Math.min(sh, vh - sy);
+    }
+
+    canvas.width = sw;
+    canvas.height = sh;
+    const cctx = canvas.getContext('2d');
+    if (currentFacing === 'user'){
+      cctx.translate(canvas.width, 0);
+      cctx.scale(-1,1);
+    }
+    cctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob(function(blob){
+      const url = URL.createObjectURL(blob);
+      const name = 'vending-' + String(shots.length+1).padStart(3,'0') + '.jpg';
+      shots.push({blob:blob, url:url, name:name});
+      renderGallery();
+      showToast('Shot ' + shots.length + ' captured');
+    }, 'image/jpeg', 0.92);
+  }
+
+  shutter.addEventListener('click', capture);
+
+  function renderGallery(){
+    counterPill.textContent = '📷 ' + shots.length + (shots.length === 1 ? ' shot' : ' shots');
+    gallery.innerHTML = '';
+    shots.forEach(function(s, i){
+      const div = document.createElement('div');
+      div.className = 'thumb';
+      div.innerHTML = '<img src="'+s.url+'"><span class="num">'+(i+1)+'</span>';
+      div.addEventListener('click', function(){ openReview(i); });
+      gallery.appendChild(div);
+    });
+    gallery.scrollLeft = gallery.scrollWidth;
+  }
+
+  function openReview(i){
+    reviewIndex = i;
+    reviewImg.src = shots[i].url;
+    reviewModal.style.display = 'flex';
+  }
+  closeReviewBtn.addEventListener('click', function(){ reviewModal.style.display = 'none'; });
+
+  deleteBtn.addEventListener('click', function(){
+    if (reviewIndex < 0) return;
+    shots.splice(reviewIndex, 1);
+    renderGallery();
+    reviewModal.style.display = 'none';
+  });
+
+  async function saveBlob(filename, blob){
+    if (!downloadsCap){
+      // fallback: open in new tab so the user can long-press to save
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      showToast('Opened photo — long-press to save');
+      return;
+    }
+    try{
+      await downloadsCap.save({filename: filename, data: blob});
+      showToast('Saved ' + filename);
+    }catch(err){
+      if (err && err.code === 'declined'){
+        // no toast needed, user chose not to save
+      } else {
+        showToast('Could not save (' + (err && err.code ? err.code : 'error') + ')');
+      }
+    }
+  }
+
+  saveOneBtn.addEventListener('click', function(){
+    if (reviewIndex < 0) return;
+    saveBlob(shots[reviewIndex].name, shots[reviewIndex].blob);
+  });
+
+  zipBtn.addEventListener('click', async function(){
+    if (!shots.length){ showToast('No shots yet'); return; }
+    showToast('Building zip…');
+    const zip = new JSZip();
+    shots.forEach(function(s){ zip.file(s.name, s.blob); });
+    const content = await zip.generateAsync({type:'blob'});
+    saveBlob('vending-machines.zip', content);
+  });
+
+})();
+</script>
+</body>
+</html>

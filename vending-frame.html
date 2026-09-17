@@ -434,16 +434,16 @@
     savePrefs();
   });
 
-  document.querySelectorAll('.aspectBtn').forEach(function(btn){
+  document.querySelectorAll('.aspectBtn[data-ratio]').forEach(function(btn){
     if (parseFloat(btn.getAttribute('data-ratio')) === ratio){
-      document.querySelectorAll('.aspectBtn').forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.aspectBtn[data-ratio]').forEach(function(b){ b.classList.remove('active'); });
       btn.classList.add('active');
     }
   });
 
-  document.querySelectorAll('.aspectBtn').forEach(function(btn){
+  document.querySelectorAll('.aspectBtn[data-ratio]').forEach(function(btn){
     btn.addEventListener('click', function(){
-      document.querySelectorAll('.aspectBtn').forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.aspectBtn[data-ratio]').forEach(function(b){ b.classList.remove('active'); });
       btn.classList.add('active');
       ratio = parseFloat(btn.getAttribute('data-ratio'));
       drawGuide();

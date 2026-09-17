@@ -88,6 +88,22 @@
   }
   .aspectBtn.active{ color:#1a0e08; background:var(--accent-2); border-color:transparent; font-weight:600; }
 
+  #sizeRow{
+    position:fixed; top:106px; left:0; right:0; z-index:10;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    padding:6px 20px;
+  }
+  #sizeLabel{ font-size:11px; color:var(--text-dim); }
+  #sizeSlider{ width:160px; accent-color:var(--accent-2); }
+
+  #photoRow{
+    position:fixed; top:142px; left:0; right:0; z-index:10;
+    display:flex; align-items:center; justify-content:center; gap:6px;
+    padding:4px 20px;
+  }
+  #photoLabel{ font-size:11px; color:var(--text-dim); margin-right:2px; }
+  .photoBtn{ padding:5px 10px; font-size:11px; }
+
   /* bottom controls */
   #bottomBar{
     position:fixed; bottom:0; left:0; right:0; z-index:10;
@@ -202,6 +218,19 @@
     <div class="aspectBtn" data-ratio="1">Square</div>
   </div>
 
+  <div id="sizeRow">
+    <span id="sizeLabel">Size</span>
+    <input type="range" id="sizeSlider" min="35" max="92" value="72">
+  </div>
+
+  <div id="photoRow">
+    <span id="photoLabel">Photo:</span>
+    <div class="aspectBtn photoBtn active" data-photo="4:3">4:3</div>
+    <div class="aspectBtn photoBtn" data-photo="16:9">16:9</div>
+    <div class="aspectBtn photoBtn" data-photo="1:1">1:1</div>
+    <div class="aspectBtn photoBtn" data-photo="full">Full</div>
+  </div>
+
   <div id="bottomBar">
     <div id="gallery"></div>
     <div id="controlsRow">
@@ -256,6 +285,32 @@
   let currentFacing = 'environment';
   let stream = null;
   let ratio = 0.62; // guide width/height
+  let guideScale = 0.72; // fraction of screen the guide's long side can fill
+  let photoAspect = 4/3; // width/height of the SAVED photo when not cropping to guide; 'full' = null (native stream shape)
+
+  const PREF_KEY = 'vendingFramePrefs';
+  function loadPrefs(){
+    try{
+      const raw = localStorage.getItem(PREF_KEY);
+      if (!raw) return;
+      const p = JSON.parse(raw);
+      if (typeof p.ratio === 'number') ratio = p.ratio;
+      if (typeof p.guideScale === 'number') guideScale = p.guideScale;
+      if (typeof p.crop === 'boolean') cropChk.checked = p.crop;
+      if (p.photoAspect === null || typeof p.photoAspect === 'number') photoAspect = p.photoAspect;
+    }catch(e){ /* ignore corrupt or unavailable storage */ }
+  }
+  function savePrefs(){
+    try{
+      localStorage.setItem(PREF_KEY, JSON.stringify({
+        ratio: ratio,
+        guideScale: guideScale,
+        crop: cropChk.checked,
+        photoAspect: photoAspect
+      }));
+    }catch(e){ /* storage unavailable (private mode, etc) — fine to skip */ }
+  }
+  loadPrefs();
   let shots = []; // {blob, url, name}
   let reviewIndex = -1;
   let downloadsCap = null;
@@ -278,10 +333,10 @@
 
   function getGuideRectCss(){
     const w = overlay.clientWidth, h = overlay.clientHeight;
-    let gw = w * 0.72;
+    let gw = w * guideScale;
     let gh = gw / ratio;
-    if (gh > h * 0.72){
-      gh = h * 0.72;
+    if (gh > h * guideScale){
+      gh = h * guideScale;
       gw = gh * ratio;
     }
     const x = (w - gw) / 2;
@@ -339,7 +394,7 @@
     try{
       if (stream){ stream.getTracks().forEach(function(t){ t.stop(); }); }
       stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: {ideal: facing}, width:{ideal:1920}, height:{ideal:1920} },
+        video: { facingMode: {ideal: facing}, width:{ideal:4032}, height:{ideal:3024} },
         audio: false
       });
       video.srcObject = stream;
@@ -371,12 +426,44 @@
     startCamera(currentFacing);
   });
 
+  const sizeSlider = document.getElementById('sizeSlider');
+  sizeSlider.value = Math.round(guideScale * 100);
+  sizeSlider.addEventListener('input', function(){
+    guideScale = parseInt(sizeSlider.value, 10) / 100;
+    drawGuide();
+    savePrefs();
+  });
+
+  document.querySelectorAll('.aspectBtn').forEach(function(btn){
+    if (parseFloat(btn.getAttribute('data-ratio')) === ratio){
+      document.querySelectorAll('.aspectBtn').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+    }
+  });
+
   document.querySelectorAll('.aspectBtn').forEach(function(btn){
     btn.addEventListener('click', function(){
       document.querySelectorAll('.aspectBtn').forEach(function(b){ b.classList.remove('active'); });
       btn.classList.add('active');
       ratio = parseFloat(btn.getAttribute('data-ratio'));
       drawGuide();
+      savePrefs();
+    });
+  });
+
+  cropChk.addEventListener('change', savePrefs);
+
+  const photoAspectMap = {'4:3': 4/3, '16:9': 16/9, '1:1': 1, 'full': null};
+  document.querySelectorAll('.photoBtn').forEach(function(btn){
+    if (photoAspectMap[btn.getAttribute('data-photo')] === photoAspect){
+      document.querySelectorAll('.photoBtn').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+    }
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.photoBtn').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      photoAspect = photoAspectMap[btn.getAttribute('data-photo')];
+      savePrefs();
     });
   });
 
@@ -400,7 +487,24 @@
       sh = r.h / scale;
       sx = Math.max(0, sx); sy = Math.max(0, sy);
       sw = Math.min(sw, vw - sx); sh = Math.min(sh, vh - sy);
+    } else if (photoAspect){
+      // center-crop the full frame to the chosen photo aspect ratio (like a stock camera's photo mode)
+      const nativeAspect = vw / vh;
+      if (nativeAspect > photoAspect){
+        // native is wider than target -> trim the sides
+        sw = vh * photoAspect;
+        sh = vh;
+        sx = (vw - sw) / 2;
+        sy = 0;
+      } else {
+        // native is taller/narrower than target -> trim top/bottom
+        sw = vw;
+        sh = vw / photoAspect;
+        sx = 0;
+        sy = (vh - sh) / 2;
+      }
     }
+    // photoAspect === null ('Full') falls through and keeps the entire native frame
 
     canvas.width = sw;
     canvas.height = sh;

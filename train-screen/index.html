@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Yamanote Line Train Screen Saver | Bash Creates</title>
+<meta name="description" content="A free Windows screensaver that recreates the passenger information screens on Tokyo's Yamanote Line E235 trains, one car per monitor.">
+<meta property="og:title" content="Yamanote Line Train Screen Saver">
+<meta property="og:description" content="A free Windows screensaver that recreates the passenger screens on Tokyo's Yamanote Line E235 trains.">
+<meta property="og:image" content="https://bashcreates.ca/train-screen/hero.jpg">
+<meta property="og:url" content="https://bashcreates.ca/train-screen/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #25253a;
+    --surface: #2e2e47;
+    --surface-hover: #35354f;
+    --border: #3d3d5c;
+    --text: #ffffff;
+    --muted: #a0a0c0;
+    --accent: #7c6fe0;
+    --jy: #7cc242;
+  }
+
+  body {
+    background: url('../Offline.png') center center / cover fixed, #25253a;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2.5rem 1.5rem 5rem;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 18, 40, 0.9);
+    z-index: 0;
+    pointer-events: none;
+  }
+  .container { position: relative; z-index: 1; width: 100%; max-width: 900px; }
+
+  a { color: #bdb5ff; }
+  .back {
+    display: flex; width: fit-content; align-items: center; gap: 6px;
+    font-size: 0.8rem; color: var(--muted); text-decoration: none; margin-bottom: 1.75rem;
+  }
+  .back:hover { color: var(--text); }
+
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: 'Space Mono', monospace; font-size: 0.72rem; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 0.6rem;
+  }
+  .jy {
+    display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border: 3px solid var(--jy); border-radius: 5px; background: #fff;
+    color: #1b1e24; font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 0.55rem; line-height: 0.95; letter-spacing: 0;
+  }
+  .jy b { font-size: 0.7rem; }
+
+  h1 { font-size: 2.4rem; font-weight: 700; line-height: 1.1; letter-spacing: -0.01em; margin-bottom: 0.75rem; }
+  .lede { font-size: 1rem; color: #c8c8e0; line-height: 1.6; max-width: 640px; }
+
+  .hero {
+    margin: 1.75rem 0 1.25rem;
+    border-radius: 8px; overflow: hidden; border: 1px solid var(--border);
+    background: #000;
+  }
+  .hero img { display: block; width: 100%; height: auto; }
+  .hero-cap { font-size: 0.75rem; color: var(--muted); padding: 0.55rem 0.85rem; background: var(--surface); border-top: 1px solid var(--border); }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 2.25rem; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 0.7rem 1.1rem; border-radius: 6px; text-decoration: none;
+    font-size: 0.875rem; font-weight: 500; color: #fff; white-space: nowrap;
+    border: 1px solid var(--border); background: var(--surface);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .btn:hover { background: var(--surface-hover); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); }
+  .btn.primary:hover { background: #6a5ed0; }
+  .btn svg { width: 16px; height: 16px; flex: none; }
+  .btn small { font-weight: 400; opacity: 0.75; font-size: 0.75rem; }
+
+  .section-label {
+    font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 0.75rem 2px;
+  }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 2.25rem 0; }
+
+  .features { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .feature {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 0.95rem 1.1rem;
+  }
+  .feature h3 { font-size: 0.95rem; font-weight: 500; margin-bottom: 0.3rem; }
+  .feature p { font-size: 0.82rem; color: var(--muted); line-height: 1.55; }
+
+  .gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .gallery figure { border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: var(--surface); }
+  .gallery img { display: block; width: 100%; height: auto; }
+  .gallery figcaption { font-size: 0.75rem; color: var(--muted); padding: 0.5rem 0.75rem; }
+
+  .steps { list-style: none; counter-reset: step; display: flex; flex-direction: column; gap: 10px; }
+  .steps li {
+    counter-increment: step; position: relative;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 0.9rem 1.1rem 0.9rem 3.4rem; font-size: 0.875rem; line-height: 1.55; color: #d8d8ee;
+  }
+  .steps li::before {
+    content: counter(step); position: absolute; left: 1rem; top: 0.85rem;
+    width: 1.6rem; height: 1.6rem; border-radius: 50%; background: var(--jy); color: #10200a;
+    font-weight: 700; font-size: 0.8rem; display: flex; align-items: center; justify-content: center;
+  }
+  .steps b, .note b { color: #fff; font-weight: 500; }
+
+  .note {
+    margin-top: 10px; padding: 0.9rem 1.1rem; border-radius: 8px;
+    background: #2a2840; border: 1px solid #5a4fb0; font-size: 0.85rem; line-height: 1.55; color: #d8d8ee;
+  }
+
+  code {
+    font-family: 'Space Mono', monospace; font-size: 0.78rem;
+    background: #1e1e38; color: #c9c3ff; padding: 1px 6px; border-radius: 4px;
+  }
+
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.15rem; }
+  .card h3 { font-size: 0.95rem; font-weight: 500; margin-bottom: 0.45rem; }
+  .card p, .card li { font-size: 0.84rem; color: #c8c8e0; line-height: 1.6; }
+  .card ul { padding-left: 1.1rem; margin-top: 0.35rem; }
+  .card p + p { margin-top: 0.5rem; }
+
+  .credit { font-size: 0.85rem; color: #c8c8e0; line-height: 1.7; }
+  .credit p + p { margin-top: 0.5rem; }
+  .credit .small { font-size: 0.78rem; color: var(--muted); }
+
+  footer { margin-top: 3rem; text-align: center; font-size: 0.75rem; color: #fff; opacity: 0.7; position: relative; z-index: 1; }
+  footer a { color: inherit; text-decoration: none; }
+
+  @media (max-width: 680px) {
+    body {
+      padding: 2rem 1rem 4rem;
+      background: linear-gradient(rgba(20, 18, 40, 0.9), rgba(20, 18, 40, 0.9)), url('../Offline.png') center center / cover scroll, #25253a;
+    }
+    body::before { display: none; }
+    h1 { font-size: 1.85rem; }
+    .features, .gallery, .two { grid-template-columns: 1fr; }
+    .btn { flex: 1 1 100%; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <a class="back" href="/">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    bashcreates.ca
+  </a>
+
+  <div class="eyebrow"><span class="jy">JY<b>17</b></span> Vibe Coded Download</div>
+  <h1>Yamanote Line Train Screen Saver</h1>
+  <p class="lede">A free Windows screensaver that recreates the passenger information screens on Tokyo's Yamanote Line E235 trains. It rides the real loop with all 30 stations, and every monitor becomes its own car.</p>
+
+  <figure class="hero">
+    <img src="hero.jpg" width="2880" height="540" alt="Three monitors showing the train screen as cars 1, 2 and 3: the arc map, the loop map and train information, all approaching Shinjuku">
+    <figcaption class="hero-cap">Three monitors, three cars: each one shows a different screen at the same moment.</figcaption>
+  </figure>
+
+  <div class="actions">
+    <a class="btn primary" href="TrainScreen-1.0.zip" download>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download for Windows <small>v1.0 · 2.2 MB</small>
+    </a>
+    <a class="btn" href="demo.html" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+      Live demo
+    </a>
+    <a class="btn" href="TrainScreen-1.0-source.zip" download>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      Source code <small>74 KB</small>
+    </a>
+  </div>
+
+  <p class="section-label">What it does</p>
+  <div class="features">
+    <div class="feature">
+      <h3>The real loop</h3>
+      <p>All 30 stations with real running times, transfer lines and exit names. The train runs both directions around the loop and stops at every station.</p>
+    </div>
+    <div class="feature">
+      <h3>One car per monitor</h3>
+      <p>Each screen is its own car, numbered left to right, and no two screens show the same thing at once. Wide monitors get two or three cars side by side.</p>
+    </div>
+    <div class="feature">
+      <h3>Japanese, kana and English</h3>
+      <p>The header cycles through kanji, kana and English like the real screens, while the lower screen moves between the line maps, platform guide, transfers and train info.</p>
+    </div>
+    <div class="feature">
+      <h3>Settings that matter</h3>
+      <p>Dim the screens down to 20% brightness and switch between a 24-hour and 12-hour clock. Everything runs offline, fonts included.</p>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <p class="section-label">The screens</p>
+  <div class="gallery">
+    <figure><img src="shot-arc.jpg" width="1600" height="900" loading="lazy" alt="Arc map showing the next four stations with minute counts"><figcaption>Arc map with a time for each of the next four stations</figcaption></figure>
+    <figure><img src="shot-platform.jpg" width="1600" height="900" loading="lazy" alt="Platform guide showing which car you are in, the exits and the door side"><figcaption>Platform guide: your car, the exits and which doors open</figcaption></figure>
+    <figure><img src="shot-loop.jpg" width="1600" height="900" loading="lazy" alt="Loop map of the whole Yamanote Line with minutes to each station"><figcaption>The whole loop, with minutes to each station</figcaption></figure>
+    <figure><img src="shot-transfer.jpg" width="1600" height="900" loading="lazy" alt="Transfer list for Shibuya station"><figcaption>Transfer lines at the next station</figcaption></figure>
+  </div>
+
+  <hr class="divider">
+
+  <p class="section-label">Install on Windows</p>
+  <ol class="steps">
+    <li>Download the zip and unzip it. Copy <b>TrainScreen.scr</b> somewhere it can stay, like <code>C:\Windows</code> (Windows will ask for admin approval). If you install it from your Downloads folder and later delete it, the screensaver stops working.</li>
+    <li>Right-click <b>TrainScreen.scr</b> and choose <b>Install</b>. Screen Saver Settings opens with <b>Yamanote Line Train Screen</b> selected.</li>
+    <li>Click <b>Settings...</b> to set brightness and the clock style, pick a wait time, then click <b>OK</b>. Use <b>Preview</b> to try it right away and move the mouse to exit.</li>
+  </ol>
+  <div class="note">
+    <b>"Windows protected your PC"?</b> That message shows up for any small program that isn't code-signed, which costs a yearly fee most hobby projects skip. Click <b>More info</b>, then <b>Run anyway</b>. Some browsers also warn about downloading screensaver files, which is why it comes in a zip.
+  </div>
+
+  <hr class="divider">
+
+  <div class="two">
+    <div class="card">
+      <h3>Mac, Linux and Lively Wallpaper</h3>
+      <p>The <a href="demo.html" target="_blank" rel="noopener">live demo</a> is the same display as a single web page, so it runs anywhere with a modern browser. Press <code>F11</code> for full screen.</p>
+      <p>On a Mac, a free screensaver like <a href="https://github.com/liquidx/webviewscreensaver" target="_blank" rel="noopener">WebViewScreenSaver</a> can show the demo page. With <a href="https://github.com/rocksdanister/lively" target="_blank" rel="noopener">Lively Wallpaper</a> on Windows, use the HTML file from the zip and set it to span all screens.</p>
+    </div>
+    <div class="card">
+      <h3>Demo page options</h3>
+      <p>Add these to the end of the demo address:</p>
+      <ul>
+        <li><code>?dim=40</code> makes it 40% darker</li>
+        <li><code>?clock=12</code> uses a 12-hour clock</li>
+        <li><code>?cars=3</code> shows three cars side by side</li>
+        <li><code>?car=4</code> starts numbering at car 4</li>
+      </ul>
+      <p>Combine them with <code>&amp;</code>, like <code>?dim=40&amp;clock=12</code>.</p>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <p class="section-label">Requirements</p>
+  <div class="card">
+    <p>Windows 10 or 11 with the Microsoft Edge WebView2 Runtime, which comes with Windows 11 and nearly every up-to-date Windows 10 PC. If the screen stays black, <a href="https://developer.microsoft.com/microsoft-edge/webview2/" target="_blank" rel="noopener">install WebView2 from Microsoft</a>. No internet connection is needed once it's installed.</p>
+  </div>
+
+  <hr class="divider">
+
+  <p class="section-label">Credits</p>
+  <div class="credit">
+    <p>Vibe coded by Claude, with minor help and supervision by Bash Creates.</p>
+    <p class="small">Fonts: Noto Sans, Noto Sans JP and Noto Sans Mono under the SIL Open Font License. Built with Go and go-webview2. Full license texts are in the download.</p>
+    <p class="small">An unofficial fan project, not affiliated with or endorsed by JR East. Station names, line colours and transfer information are public reference information, and running times are approximate.</p>
+  </div>
+
+</div>
+
+<footer>bashcreates.ca &nbsp;·&nbsp; <a href="/">Back to the homepage</a></footer>
+</body>
+</html>

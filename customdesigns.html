@@ -341,6 +341,18 @@
     color: var(--muted);
     text-align: center;
   }
+  /* In Stock badges: to update, add or remove "in-stock" on a colour chip and its badge span */
+  .color-chip.in-stock .color-swatch { border-color: #3ecf8e; }
+  .stock-badge {
+    font-size: 0.55rem !important;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: #0d2b1e !important;
+    background: #3ecf8e;
+    padding: 2px 7px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
   .swatch-legend {
     display: flex;
     align-items: center;
@@ -771,43 +783,47 @@
           </div>
         </div>
         <div class="colors-row">
-          <div class="color-chip">
+          <div class="color-chip" data-colour="eldritch-purple">
             <div class="color-swatch" style="background: linear-gradient(135deg, #2a2a2a 60%, #6b21a8 60%);"></div>
             <span>Eldritch Purple</span>
           </div>
-          <div class="color-chip">
+          <div class="color-chip" data-colour="midnight-blue">
             <div class="color-swatch" style="background: linear-gradient(135deg, #1c1c2e 60%, #2b46c9 60%);"></div>
             <span>Midnight Blue</span>
           </div>
-          <div class="color-chip">
+          <div class="color-chip" data-colour="shadow-red">
             <div class="color-swatch" style="background: linear-gradient(135deg, #1a1a1a 60%, #c81e1e 60%);"></div>
             <span>Shadow Red</span>
           </div>
-          <div class="color-chip">
+          <div class="color-chip in-stock" data-colour="acid-green">
             <div class="color-swatch" style="background: linear-gradient(135deg, #1a1a1a 60%, #7ed321 60%);"></div>
             <span>Acid Green</span>
+            <span class="stock-badge">In Stock</span>
           </div>
-          <div class="color-chip">
+          <div class="color-chip" data-colour="lavender-mist">
             <div class="color-swatch" style="background: linear-gradient(135deg, #c9a3dc 60%, #ffffff 60%);"></div>
             <span>Lavender Mist</span>
           </div>
-          <div class="color-chip">
+          <div class="color-chip" data-colour="ember-orange">
             <div class="color-swatch" style="background: linear-gradient(135deg, #e07820 60%, #1a1a1a 60%);"></div>
             <span>Ember Orange</span>
           </div>
-          <div class="color-chip">
+          <div class="color-chip in-stock" data-colour="pixie-pink">
             <div class="color-swatch" style="background: linear-gradient(135deg, #ff2d87 60%, #ffffff 60%);"></div>
             <span>Pixie Pink</span>
+            <span class="stock-badge">In Stock</span>
           </div>
-          <div class="color-chip">
+          <div class="color-chip in-stock" data-colour="dragon-red">
             <div class="color-swatch" style="background: linear-gradient(135deg, #cc2222 60%, #1a1a1a 60%);"></div>
             <span>Dragon Red</span>
+            <span class="stock-badge">In Stock</span>
           </div>
-          <div class="color-chip">
+          <div class="color-chip in-stock" data-colour="arcane-blue">
             <div class="color-swatch" style="background: linear-gradient(135deg, #3355bb 60%, #1a1a1a 60%);"></div>
             <span>Arcane Blue</span>
+            <span class="stock-badge">In Stock</span>
           </div>
-          <div class="color-chip">
+          <div class="color-chip" data-colour="phase-shift">
             <div class="color-swatch lamp"></div>
             <span>Phase Shift RGB Lamp</span>
           </div>

@@ -1030,6 +1030,15 @@
     });
   })();
 
+  // Some mobile browsers stop a looping video after one play; restart it if so
+  document.querySelectorAll('.video-tile video').forEach(function(v) {
+    v.addEventListener('ended', function() {
+      v.currentTime = 0;
+      var p = v.play();
+      if (p && p.catch) p.catch(function() {});
+    });
+  });
+
   const copyBtn = document.getElementById('copy-email-btn');
   const iconHTML = copyBtn.innerHTML;
   copyBtn.addEventListener('click', function() {

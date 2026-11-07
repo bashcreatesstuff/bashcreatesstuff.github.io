@@ -450,7 +450,7 @@
     border-radius: 50%;
     object-fit: cover;
     display: block;
-    animation: portraitIn 0.8s ease-out 2.3s both;
+    animation: portraitIn 1.1s ease-out 2.3s both;
   }
 
   /* Neon tube sign traced in one continuous line; the portrait fades in underneath as it finishes */
@@ -522,9 +522,11 @@
     to   { opacity: 0; }
   }
 
+  /* Fades in with a bright flash, then settles to normal brightness */
   @keyframes portraitIn {
-    from { opacity: 0; transform: scale(0.97); }
-    to   { opacity: 1; transform: scale(1); }
+    0%   { opacity: 0; transform: scale(0.97); filter: brightness(1); }
+    35%  { opacity: 1; transform: scale(1.01); filter: brightness(2.3) saturate(1.3); }
+    100% { opacity: 1; transform: scale(1); filter: brightness(1) saturate(1); }
   }
 
   @media (prefers-reduced-motion: reduce) {

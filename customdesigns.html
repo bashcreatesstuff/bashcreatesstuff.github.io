@@ -521,6 +521,25 @@
     opacity: 0.7;
   }
 
+
+  /* Reviews */
+  .tile-reviews { padding: 1.4rem 1.6rem 1.3rem; display: flex; flex-direction: column; gap: 1.1rem; }
+  .reviews-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.4rem 1rem; }
+  .reviews-score { display: flex; align-items: baseline; gap: 0.6rem; }
+  .reviews-stars { color: #ffb547; font-size: 1.15rem; letter-spacing: 0.08em; }
+  .reviews-count { font-family: 'Space Mono', monospace; font-weight: 700; font-size: 0.95rem; }
+  .reviews-source { font-size: 0.75rem; color: var(--muted); }
+  .reviews-quotes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .review { margin: 0; padding: 1rem 1.1rem; border: 1px solid var(--border); border-radius: 10px; background: rgba(124,111,224,0.07); display: flex; flex-direction: column; justify-content: space-between; gap: 0.8rem; }
+  .review blockquote { margin: 0; font-size: 0.88rem; line-height: 1.5; }
+  .review figcaption { font-size: 0.72rem; color: var(--muted); }
+  .review figcaption strong { color: var(--text, #f0f0fa); font-weight: 500; margin-right: 0.35rem; }
+  .reviews-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 0.72rem; color: var(--muted); }
+  .reviews-tag { border: 1px solid var(--border); border-radius: 20px; padding: 3px 9px; white-space: nowrap; }
+  .reviews-tag b { font-family: 'Space Mono', monospace; color: var(--accent); margin-left: 0.3rem; }
+  .reviews-names { flex-basis: 100%; margin-top: 0.3rem; }
+  @media (max-width: 860px) { .reviews-quotes { grid-template-columns: 1fr; } }
+
   @media (max-width: 860px) {
     .bento { grid-template-columns: repeat(2, 1fr); grid-auto-rows: minmax(190px, auto); }
     .tile-2x2 { grid-column: span 2; grid-row: span 2; }
@@ -867,6 +886,36 @@
       <span class="tile-caption">Some of the available colours</span>
     </div>
 
+    <!-- Reviews (from Kyle's Facebook Marketplace profile) -->
+    <div class="tile tile-4x1 tile-reviews">
+      <div class="reviews-head">
+        <div class="reviews-score"><span class="reviews-stars" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span><span class="reviews-count">5.0 from 13 reviews</span></div>
+        <span class="reviews-source">From my Facebook Marketplace profile, across everything I've sold</span>
+      </div>
+      <div class="reviews-quotes">
+        <figure class="review">
+          <blockquote>"Absolutely phenomenal work, phenomenal publication, amazingly accommodating and very friendly service! Kyle was very quick to respond to every message and extremely fast in production time!"</blockquote>
+          <figcaption><strong>Nikki</strong>Dice Vault, Aug 2026</figcaption>
+        </figure>
+        <figure class="review">
+          <blockquote>"Exactly what I asked for, he even custom printed one for me in the colors I chose."</blockquote>
+          <figcaption><strong>Corwin</strong>Dice Vault, Nov 2025</figcaption>
+        </figure>
+        <figure class="review">
+          <blockquote>"Amazing product, looks incredible in my space!"</blockquote>
+          <figcaption><strong>Corey</strong>Aug 2025</figcaption>
+        </figure>
+      </div>
+      <div class="reviews-foot">
+        <span>Buyers called out:</span>
+        <span class="reviews-tag">Communication<b>11</b></span>
+        <span class="reviews-tag">Pricing<b>9</b></span>
+        <span class="reviews-tag">Punctuality<b>6</b></span>
+        <span class="reviews-tag">Item Description<b>6</b></span>
+        <span class="reviews-names">Also rated five stars by Isaac, Kayce, Kallie, Maddie, Dan, Bill, Ian, Kevin, Braeden and David.</span>
+      </div>
+    </div>
+
     <!-- CAD drawing -->
     <div class="tile tile-4x1">
       <span class="tile-label">Designed From Scratch</span>
@@ -1002,7 +1051,7 @@
   <img id="lightboxImg" src="" alt="">
 </div>
 
-<footer>bashcreates.ca &nbsp;·&nbsp; <a href="https://bashcreatesstuff.github.io" style="color: inherit; text-decoration: none;">bashcreatesstuff.github.io</a><br><span>✦ Portrait art by Sif the Artist</span><br><span class="page-version">v1.14 &nbsp;·&nbsp; Updated Nov 9, 2026</span></footer>
+<footer>bashcreates.ca &nbsp;·&nbsp; <a href="https://bashcreatesstuff.github.io" style="color: inherit; text-decoration: none;">bashcreatesstuff.github.io</a><br><span>✦ Portrait art by Sif the Artist</span><br><span class="page-version">v1.15 &nbsp;·&nbsp; Updated Nov 9, 2026</span></footer>
 
 <script>
   (function() {

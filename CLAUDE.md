@@ -9,7 +9,7 @@ Static GitHub Pages site for bashcreates.ca. Pages are hand-written HTML with in
   - In the footer: `<br><span>✦ Portrait art by Sif the Artist</span>` after the site links.
 - **In Stock badges** (`customdesigns.html`): a vault colour that's in stock gets `in-stock` on its colour chip plus a `<span class="stock-badge">In Stock</span>`, and a `<span class="stock-badge on-photo">In Stock</span>` on its closed and open photo tiles. Stock comes from Kyle's sales tracker.
 - **Page versions:** pages with a footer (`index.html`, `customdesigns.html`, `404.html`, `train-screen/index.html`) show `<span class="page-version">vX.Y &nbsp;·&nbsp; Updated Mon D, YYYY</span>` at the end of the footer. Every PR that changes a page bumps that page's version and date: minor (v1.0 to v1.1) for normal changes, major (v1.x to v2.0) for a redesign. Pages the PR doesn't touch keep their version.
-- Changes go through a branch and pull request; Kyle approves before merging. Every PR comes with a preview link so Kyle can see it first: `https://raw.githack.com/bashcreatesstuff/bashcreatesstuff.github.io/<branch>/<page>.html`.
+- Changes go through a branch and pull request; Kyle approves before merging. Every PR comes with a preview link so Kyle can see it first. Pin it to the commit, not the branch, because raw.githack caches branch links for a few minutes and shows stale versions after a push: `https://raw.githack.com/bashcreatesstuff/bashcreatesstuff.github.io/<full commit sha>/<page>.html`. Send a new link after every push.
 
 ## Keep it honest, not salesy
 

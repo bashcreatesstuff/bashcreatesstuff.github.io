@@ -302,6 +302,9 @@
   .colors-row {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
+    /* Every row matches the tallest one, so rows with In Stock badges don't sit taller than the rest */
+    grid-auto-rows: 1fr;
+    align-items: start;
     gap: 14px 8px;
     margin-top: 0.7rem;
   }
@@ -867,6 +870,10 @@
             <span>Arcane Blue</span>
             <span class="stock-badge">In Stock</span>
           </div>
+          <div class="color-chip" data-colour="forest-green">
+            <div class="color-swatch" style="background: linear-gradient(135deg, #27774f 60%, #1a1a1a 60%);"></div>
+            <span>Forest Green</span>
+          </div>
           <div class="color-chip" data-colour="phase-shift">
             <div class="color-swatch lamp"></div>
             <span>Phase Shift RGB Lamp</span>
@@ -981,6 +988,16 @@
       <span class="tile-caption">Midnight Blue, open</span>
     </div>
 
+    <!-- Forest Green: wide featured row -->
+    <div class="tile tile-2x1">
+      <img src="dice-photos/forest-green-closed.jpg" alt="Forest Green Dice Vault, closed" class="tile-media">
+      <span class="tile-caption">Forest Green, closed</span>
+    </div>
+    <div class="tile tile-2x1">
+      <img src="dice-photos/forest-green-open.jpg" alt="Forest Green Dice Vault, open with dice inside" class="tile-media" style="object-position: 50% 32%">
+      <span class="tile-caption">Forest Green, open</span>
+    </div>
+
     <!-- RGB Lamp autoplay - full width -->
     <div class="tile tile-4x1 video-tile">
       <span class="tile-label">Phase Shift RGB Lamp</span>
@@ -1051,7 +1068,7 @@
   <img id="lightboxImg" src="" alt="">
 </div>
 
-<footer>bashcreates.ca &nbsp;·&nbsp; <a href="https://bashcreatesstuff.github.io" style="color: inherit; text-decoration: none;">bashcreatesstuff.github.io</a><br><span>✦ Portrait art by Sif the Artist</span><br><span class="page-version">v1.19 &nbsp;·&nbsp; Updated Nov 13, 2026</span></footer>
+<footer>bashcreates.ca &nbsp;·&nbsp; <a href="https://bashcreatesstuff.github.io" style="color: inherit; text-decoration: none;">bashcreatesstuff.github.io</a><br><span>✦ Portrait art by Sif the Artist</span><br><span class="page-version">v1.20 &nbsp;·&nbsp; Updated Nov 13, 2026</span></footer>
 
 <script>
   (function() {

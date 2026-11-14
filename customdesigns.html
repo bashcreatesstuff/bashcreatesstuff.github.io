@@ -302,6 +302,9 @@
   .colors-row {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
+    /* Every row matches the tallest one, so rows with In Stock badges don't sit taller than the rest */
+    grid-auto-rows: 1fr;
+    align-items: start;
     gap: 14px 8px;
     margin-top: 0.7rem;
   }

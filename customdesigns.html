@@ -12,6 +12,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Custom Designs · Bash Creates</title>
+<meta name="description" content="Giant 3D-printed D20 dice vaults and colour-changing lamps, designed and hand assembled by Kyle in Kamloops, BC. $40 per vault, $55 per lamp.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://bashcreates.ca/customdesigns">
+<meta property="og:title" content="Dice Vaults and Phase Shift RGB Lamps · Bash Creates">
+<meta property="og:description" content="Giant 3D-printed D20 dice vaults and colour-changing lamps, designed and hand assembled by Kyle in Kamloops, BC. $40 per vault, $55 per lamp.">
+<meta property="og:image" content="https://bashcreates.ca/dice-photos/share-preview.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Red, pink and orange D20 dice vaults on a wooden table">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&family=Orbitron:wght@700&family=Digital+Numbers&display=swap" rel="stylesheet">
 <style>
@@ -83,6 +93,15 @@
     line-height: 1.55;
   }
 
+  .prices { display: flex; flex-wrap: wrap; gap: 0.5rem 1.4rem; margin: 0.9rem 0 1rem; font-family: 'Space Mono', monospace; font-size: 0.95rem; }
+  .prices span { white-space: nowrap; }
+  .prices strong { color: var(--accent); font-size: 1.15rem; margin-right: 0.35rem; }
+  .how-to-order { margin: 1rem 0 0; padding: 0.8rem 0.9rem 0.85rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.8rem; line-height: 1.5; color: var(--muted); }
+  .how-to-order h2 { font-family: 'Space Mono', monospace; font-size: 0.85rem; font-weight: 700; color: var(--text, #f0f0fa); margin-bottom: 0.4rem; }
+  .how-to-order ol { padding-left: 1.2rem; display: grid; gap: 0.25rem; }
+  .how-to-order a { color: var(--accent); }
+  .lamp-details { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; padding: 1.6rem 1rem 0.8rem; font-size: 0.8rem; line-height: 1.5; color: #f0f0fa; background: linear-gradient(to top, rgba(10,9,20,0.9), rgba(10,9,20,0)); pointer-events: none; }
+  .lamp-details strong { font-family: 'Space Mono', monospace; }
   .care-note { margin: 1rem 0 0; padding: 0.7rem 0.9rem; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 8px; font-size: 0.8rem; line-height: 1.5; color: var(--muted); }
   .care-note strong { color: var(--text, #f0f0fa); font-weight: 600; }
   .print-time {
@@ -827,6 +846,10 @@
         <h1>Dice Vaults /<br>Phase Shift RGB Lamp</h1>
         <p class="tagline">These giant dice measure about 7 inches tall and hold TONS of your regular dice. They also make a great conversation starter and decoration piece for your TTRPG space.</p>
         <p class="blurb">Every Dice Vault is designed from scratch, 3D printed, and assembled by hand. No AI used in the design process from start to finish.</p>
+        <div class="prices">
+          <span><strong>$40</strong>Dice Vault</span>
+          <span><strong>$55</strong>Phase Shift RGB Lamp</span>
+        </div>
         <div class="swatch-legend">
           <div class="swatch-legend-swatch"></div>
           <div class="swatch-legend-labels">
@@ -888,6 +911,15 @@
             <span class="print-time-value">~9hr 45min</span>
             <span class="print-time-suffix">per die</span>
           </span>
+        </div>
+        <div class="how-to-order">
+          <h2>How to order</h2>
+          <ol>
+            <li><a href="mailto:info@bashcreates.ca?subject=Custom%20D20%20Dice%20Order">Email me</a> with the colour you'd like.</li>
+            <li>Pay by e-Transfer to info@bashcreates.ca, or cash at pickup.</li>
+            <li>If your colour is in stock it's ready right away. If not, it takes about a week to print and assemble.</li>
+            <li>Pick it up in Kamloops. Local pickup only, no shipping.</li>
+          </ol>
         </div>
         <p class="care-note"><strong>Care note:</strong> Dice Vaults and lamps are printed in PLA, which can soften and warp in high heat. Please don't leave them in a hot car, a sunny window, or near a heater or fireplace.</p>
       </div>
@@ -1026,6 +1058,7 @@
       <video autoplay muted loop playsinline preload="auto">
         <source src="dice-photos/RGB-Dice-V2.mp4" type="video/mp4">
       </video>
+      <p class="lamp-details"><strong>$55</strong> &nbsp;The same size as a Dice Vault, lit from inside by LEDs that fade through colours on their own. Plugs in with a USB cable and comes with a remote. It's a lamp, so it doesn't open to hold dice.</p>
     </div>
 
     <!-- Print Time-Lapse -->
@@ -1074,7 +1107,7 @@
   <img id="lightboxImg" src="" alt="">
 </div>
 
-<footer>bashcreates.ca &nbsp;·&nbsp; <a href="https://bashcreatesstuff.github.io" style="color: inherit; text-decoration: none;">bashcreatesstuff.github.io</a><br><span>✦ Portrait art by Sif the Artist</span><br><span class="page-version">v1.25 &nbsp;·&nbsp; Updated Nov 17, 2026</span></footer>
+<footer>bashcreates.ca &nbsp;·&nbsp; <a href="https://bashcreatesstuff.github.io" style="color: inherit; text-decoration: none;">bashcreatesstuff.github.io</a><br><span>✦ Portrait art by Sif the Artist</span><br><span class="page-version">v1.26 &nbsp;·&nbsp; Updated Nov 17, 2026</span></footer>
 
 <script>
   (function() {
